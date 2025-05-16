@@ -43,6 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
 
 # API 키와 환경 변수 파일 - 절대 저장소에 포함하지 않도록 함
 .env
@@ -50,3 +51,11 @@ app.*.map.json
 .env.*
 env.g.dart
 /lib/env/
+
+# 빌드 파일 및 로그
+/build/
+/ios/build/
+/android/build/
+**/build/
+*.log
+*.log.*
