@@ -668,8 +668,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: _launchEmail,
             ),
             ListTile(
-              title: const Text('법적 정보'),
-              subtitle: const Text('개인정보 처리방침, 이용약관 등'),
+              title: const Text('이용약관'),
+              subtitle: const Text('이용약관 및 개인정보처리방침'),
               leading: const Icon(Icons.assignment_outlined),
               onTap: () {
                 Navigator.push(
