@@ -3,349 +3,278 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
-import 'package:in_app_purchase_android/in_app_purchase_android.dart';
-import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
-import 'package:in_app_purchase_storekit/store_kit_wrappers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chunk_up/core/config/app_config.dart';
+import 'package:chunk_up/core/config/feature_flags.dart';
 import 'package:chunk_up/core/constants/subscription_constants.dart';
 import 'package:chunk_up/domain/models/subscription_plan.dart';
 import 'package:chunk_up/data/services/storage/local_storage_service.dart';
 
-/// 구독 서비스
-/// 인앱 구매, 구독 상태 관리, 사용량 제한 등을 처리
+// 내부 테스트를 위한 추가 임포트
+// import 'package:in_app_purchase/in_app_purchase.dart'; // 테스트 시 주석 해제
+// import 'package:in_app_purchase_android/in_app_purchase_android.dart'; // 테스트 시 주석 해제
+// import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart'; // 테스트 시 주석 해제
+// import 'package:in_app_purchase_storekit/store_kit_wrappers.dart'; // 테스트 시 주석 해제
+
+/// 구독 상태
+enum SubscriptionStatus {
+  free,         // 무료
+  basic,        // 기본 구독
+  premium,      // 프리미엄 구독
+  testPremium,  // 테스트용 프리미엄
+}
+
+/// 내부 테스트용 간소화된 구독 서비스
+/// 실제 인앱 결제 기능은 비활성화하고 테스트 모드로 동작
 class SubscriptionService {
-  final InAppPurchase _inAppPurchase = InAppPurchase.instance;
-  final StorageService _storageService;
-  
+  // 싱글톤 인스턴스
+  static final SubscriptionService _instance = SubscriptionService._internal();
+  factory SubscriptionService() => _instance;
+
+  // 의존성
+  final AppConfig _appConfig = AppConfig();
+  final FeatureFlags _featureFlags = FeatureFlags();
+  final StorageService? _storageService; // 선택적 사용
+
+  // 상태 변수
+  SubscriptionStatus _currentStatus = SubscriptionStatus.free;
+  int _remainingCredits = 5;
+  DateTime? _subscriptionExpiryDate;
+
   // 구독 상태 변경 이벤트를 위한 스트림 컨트롤러
   final _subscriptionStatusController = StreamController<SubscriptionStatus>.broadcast();
   Stream<SubscriptionStatus> get subscriptionStatusStream => _subscriptionStatusController.stream;
-  
-  // 구독 상품 정보
-  List<ProductDetails> _products = [];
-  List<ProductDetails> get products => _products;
-  
-  // 현재 구독 상태
-  SubscriptionStatus _currentStatus = SubscriptionStatus.defaultFree();
-  SubscriptionStatus get currentStatus => _currentStatus;
-  
-  // 구독 구매 관련 스트림 구독
-  StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
-  
-  // 구독의 월간 리셋을 위한 타이머
-  Timer? _monthlyResetTimer;
-  
-  SubscriptionService({
+
+  // 설정 키
+  static const String _keySubscriptionStatus = 'subscription_status';
+  static const String _keyCredits = 'remaining_credits';
+  static const String _keyExpiryDate = 'subscription_expiry';
+
+  // 내부 생성자
+  SubscriptionService._internal() : _storageService = null {
+    // 서비스 초기화
+    _initializeAsync();
+  }
+
+  // Factory 생성자 (DI 방식)
+  SubscriptionService.withStorage({
     required StorageService storageService,
   }) : _storageService = storageService {
-    _initialize();
+    _initializeAsync();
   }
   
-  /// 서비스 초기화
-  Future<void> _initialize() async {
-    // 저장된 구독 상태 로드
-    await _loadSubscriptionStatus();
-    
-    // 월간 리셋 타이머 설정
-    _setupMonthlyResetTimer();
-    
-    // 인앱 구매 초기화
-    final isAvailable = await _inAppPurchase.isAvailable();
-    if (!isAvailable) {
-      debugPrint('❌ 인앱 구매를 사용할 수 없습니다.');
-      _currentStatus = SubscriptionStatus.defaultFree();
-      _subscriptionStatusController.add(_currentStatus);
-      return;
-    }
-    
-    // iOS에서 보류 중인 트랜잭션 완료
-    if (Platform.isIOS) {
-      final InAppPurchaseStoreKitPlatformAddition iosPlatformAddition =
-          _inAppPurchase.getPlatformAddition<InAppPurchaseStoreKitPlatformAddition>();
-      await iosPlatformAddition.setDelegate(ExamplePaymentQueueDelegate());
-    }
-    
-    // 구독 상품 정보 로드
-    await _loadProductDetails();
-    
-    // 구매 이벤트 리스너 설정
-    _purchaseSubscription = _inAppPurchase.purchaseStream.listen(
-      _handlePurchaseUpdate,
-      onDone: () {
-        _purchaseSubscription?.cancel();
-      },
-      onError: (error) {
-        debugPrint('⚠️ 구매 스트림 오류: $error');
-      },
-    );
-  }
-  
-  /// 구독 상품 정보 로드
-  Future<void> _loadProductDetails() async {
-    try {
-      final Set<String> productIds = {
-        SubscriptionConstants.basicMonthlyProductId,
-        SubscriptionConstants.premiumMonthlyProductId,
-      };
-      
-      final ProductDetailsResponse response = 
-          await _inAppPurchase.queryProductDetails(productIds);
-      
-      if (response.notFoundIDs.isNotEmpty) {
-        debugPrint('⚠️ 찾을 수 없는 상품 ID: ${response.notFoundIDs}');
-      }
-      
-      _products = response.productDetails;
-      debugPrint('✅ 로드된 상품 수: ${_products.length}');
-      
-      for (final product in _products) {
-        debugPrint('📦 상품 정보: ${product.id} - ${product.title} - ${product.price}');
-      }
-    } catch (e) {
-      debugPrint('❌ 상품 정보 로드 중 오류: $e');
-    }
-  }
-  
-  /// 저장된 구독 상태 로드
-  Future<void> _loadSubscriptionStatus() async {
-    try {
-      final statusJson = await _storageService.getString(SubscriptionConstants.subscriptionStatusKey);
-      
-      if (statusJson != null) {
-        final Map<String, dynamic> jsonMap = Map<String, dynamic>.from(
-          jsonDecode(statusJson) as Map
-        );
-        _currentStatus = SubscriptionStatus.fromJson(jsonMap);
-      } else {
-        _currentStatus = SubscriptionStatus.defaultFree();
-      }
-      
-      // 만료된 구독 확인 및 처리
-      if (_currentStatus.subscriptionType != SubscriptionType.free &&
-          _currentStatus.expiryDate != null &&
-          _currentStatus.expiryDate!.isBefore(DateTime.now())) {
-        // 구독이 만료된 경우 무료 플랜으로 변경
-        _currentStatus = SubscriptionStatus.defaultFree();
-        await _saveSubscriptionStatus();
-      }
-      
-      // 월간 리셋 확인
-      final now = DateTime.now();
-      final lastReset = _currentStatus.lastGenerationResetDate;
-      if (now.year > lastReset.year || now.month > lastReset.month) {
-        // 새로운 달이 시작되었으므로 출력 횟수 리셋
-        _currentStatus = SubscriptionStatus(
-          subscriptionType: _currentStatus.subscriptionType,
-          expiryDate: _currentStatus.expiryDate,
-          generationCount: 0,
-          lastGenerationResetDate: now,
-        );
-        await _saveSubscriptionStatus();
-      }
-      
-      // 스트림을 통해 초기 상태 전달
-      _subscriptionStatusController.add(_currentStatus);
-    } catch (e) {
-      debugPrint('❌ 구독 상태 로드 중 오류: $e');
-      _currentStatus = SubscriptionStatus.defaultFree();
-      _subscriptionStatusController.add(_currentStatus);
-    }
-  }
-  
-  /// 구독 상태 저장
-  Future<void> _saveSubscriptionStatus() async {
-    try {
-      final jsonMap = _currentStatus.toJson();
-      await _storageService.setString(
-        SubscriptionConstants.subscriptionStatusKey,
-        jsonEncode(jsonMap),
-      );
-    } catch (e) {
-      debugPrint('❌ 구독 상태 저장 중 오류: $e');
-    }
-  }
-  
-  /// 월간 리셋 타이머 설정
-  void _setupMonthlyResetTimer() {
-    _monthlyResetTimer?.cancel();
-    
-    // 다음 달 1일 0시 계산
-    final now = DateTime.now();
-    final nextMonth = DateTime(now.year, now.month + 1, 1);
-    final timeUntilNextMonth = nextMonth.difference(now);
-    
-    _monthlyResetTimer = Timer(timeUntilNextMonth, () {
-      // 월간 리셋 수행
-      _currentStatus = SubscriptionStatus(
-        subscriptionType: _currentStatus.subscriptionType,
-        expiryDate: _currentStatus.expiryDate,
-        generationCount: 0,
-        lastGenerationResetDate: DateTime.now(),
-      );
-      _saveSubscriptionStatus();
-      _subscriptionStatusController.add(_currentStatus);
-      
-      // 다음 달을 위한 타이머 재설정
-      _setupMonthlyResetTimer();
+  // 비동기 초기화 시작
+  void _initializeAsync() {
+    // 비동기 초기화 실행
+    _initialize().then((_) {
+      debugPrint('✅ 구독 서비스 초기화 완료');
+    }).catchError((error) {
+      debugPrint('❌ 구독 서비스 초기화 오류: $error');
     });
   }
-  
-  /// 구매 이벤트 처리
-  Future<void> _handlePurchaseUpdate(List<PurchaseDetails> purchaseDetailsList) async {
-    for (final PurchaseDetails purchaseDetails in purchaseDetailsList) {
-      switch (purchaseDetails.status) {
-        case PurchaseStatus.pending:
-          debugPrint('🔄 구매 진행 중...');
-          break;
-        
-        case PurchaseStatus.purchased:
-        case PurchaseStatus.restored:
-          // 영수증 검증 (서버 측에서 수행하는 것이 좋음)
-          bool valid = await _verifyPurchase(purchaseDetails);
-          
-          if (valid) {
-            // 구독 상태 업데이트
-            await _processPurchase(purchaseDetails);
-          } else {
-            // 검증 실패 시 오류 처리
-            debugPrint('❌ 구매 검증 실패');
-          }
-          break;
-        
-        case PurchaseStatus.error:
-          debugPrint('❌ 구매 오류: ${purchaseDetails.error?.message}');
-          break;
-        
-        case PurchaseStatus.canceled:
-          debugPrint('🚫 구매 취소됨');
-          break;
+
+  /// 서비스 초기화
+  Future<void> _initialize() async {
+    // 테스트 모드 설정
+    if (_featureFlags.enablePremiumFeatures) {
+      _currentStatus = SubscriptionStatus.testPremium;
+      _remainingCredits = _appConfig.freeCreditsForTesters;
+      _subscriptionExpiryDate = DateTime.now().add(const Duration(days: 365));
+
+      // 스트림 업데이트
+      _subscriptionStatusController.add(_currentStatus);
+
+      debugPrint('👑 테스트 프리미엄 모드 활성화');
+      return;
+    }
+
+    // 일반 모드 - SharedPreferences에서 상태 로드
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // 구독 상태 로드
+      final statusStr = prefs.getString(_keySubscriptionStatus);
+      if (statusStr != null) {
+        final statusIndex = int.tryParse(statusStr);
+        if (statusIndex != null && statusIndex >= 0 && statusIndex < SubscriptionStatus.values.length) {
+          _currentStatus = SubscriptionStatus.values[statusIndex];
+        }
       }
-      
-      // Google Play 캐시 문제를 방지하기 위해 완료 처리
-      if (purchaseDetails.pendingCompletePurchase) {
-        await _inAppPurchase.completePurchase(purchaseDetails);
+
+      // 남은 크레딧 로드
+      _remainingCredits = prefs.getInt(_keyCredits) ?? 5;
+
+      // 만료일 로드
+      final expiryStr = prefs.getString(_keyExpiryDate);
+      if (expiryStr != null) {
+        _subscriptionExpiryDate = DateTime.parse(expiryStr);
+
+        // 만료 확인
+        if (_subscriptionExpiryDate!.isBefore(DateTime.now())) {
+          _currentStatus = SubscriptionStatus.free;
+          _subscriptionExpiryDate = null;
+        }
       }
+
+      // 스트림 업데이트
+      _subscriptionStatusController.add(_currentStatus);
+
+      debugPrint('💳 구독 상태 로드: $_currentStatus, 남은 크레딧: $_remainingCredits');
+    } catch (e) {
+      debugPrint('⚠️ 구독 정보 로드 실패: $e');
+      _currentStatus = SubscriptionStatus.free;
+      _remainingCredits = 5;
+
+      // 스트림 업데이트
+      _subscriptionStatusController.add(_currentStatus);
     }
   }
   
-  /// 구매 검증 (실제 구현에서는 서버측 검증이 필요)
-  Future<bool> _verifyPurchase(PurchaseDetails purchaseDetails) async {
-    // TODO: 서버 측 검증 구현 필요
-    // 여기서는 단순 예시로 true 반환
+  // 상태 접근자
+  SubscriptionStatus get status => _currentStatus;
+  bool get isPremium => _currentStatus == SubscriptionStatus.premium ||
+                        _currentStatus == SubscriptionStatus.testPremium;
+  int get remainingCredits => isPremium ? 999 : _remainingCredits;
+  DateTime? get expiryDate => _subscriptionExpiryDate;
+
+  // 크레딧 사용
+  Future<bool> useCredit() async {
+    // 프리미엄 사용자는 크레딧 무제한
+    if (isPremium) return true;
+
+    // 테스트 모드에서 무제한 청크 생성이 활성화된 경우
+    if (_featureFlags.unlimitedChunkGeneration) {
+      debugPrint('♾️ 무제한 크레딧 모드 활성화');
+      return true;
+    }
+
+    // 무료 사용자의 크레딧 확인
+    if (_remainingCredits <= 0) {
+      debugPrint('⚠️ 남은 크레딧 없음');
+      return false;
+    }
+
+    // 크레딧 차감
+    _remainingCredits--;
+    await _saveRemainingCredits();
+    debugPrint('💰 크레딧 사용: 남은 개수 $_remainingCredits');
     return true;
   }
-  
-  /// 구매 처리
-  Future<void> _processPurchase(PurchaseDetails purchaseDetails) async {
-    final String productId = purchaseDetails.productID;
-    
-    SubscriptionType? subscriptionType;
-    if (productId == SubscriptionConstants.basicMonthlyProductId) {
-      subscriptionType = SubscriptionType.basic;
-    } else if (productId == SubscriptionConstants.premiumMonthlyProductId) {
-      subscriptionType = SubscriptionType.premium;
+
+  // 구독 확인 (테스트용)
+  Future<bool> checkSubscription() async {
+    // 테스트 모드
+    if (_appConfig.isTestMode && _featureFlags.enablePremiumFeatures) {
+      debugPrint('🧪 테스트 모드: 구독 활성화 상태');
+      return true;
     }
-    
-    if (subscriptionType != null) {
-      // 만료 날짜 계산 (1개월 후)
-      final now = DateTime.now();
-      final expiryDate = DateTime(now.year, now.month + 1, now.day);
-      
-      // 구독 상태 업데이트
-      _currentStatus = _currentStatus.updateSubscription(subscriptionType, expiryDate);
-      await _saveSubscriptionStatus();
-      _subscriptionStatusController.add(_currentStatus);
-      
-      debugPrint('✅ 구독 업데이트 성공: $subscriptionType');
-    } else {
-      debugPrint('⚠️ 알 수 없는 제품 ID: $productId');
+
+    // 만료 확인
+    if (_subscriptionExpiryDate != null &&
+        _subscriptionExpiryDate!.isAfter(DateTime.now())) {
+      return true;
     }
+
+    return isPremium;
   }
-  
-  /// 구독 구매 시작
-  Future<void> purchaseSubscription(SubscriptionType type) async {
+
+  // 테스트 구독 활성화
+  Future<bool> activateTestSubscription({bool isPremium = true}) async {
+    if (!_appConfig.isTestMode) {
+      debugPrint('⚠️ 프로덕션 환경에서 테스트 구독 활성화 시도');
+      return false;
+    }
+
+    _currentStatus = isPremium ?
+      SubscriptionStatus.testPremium : SubscriptionStatus.basic;
+
+    _subscriptionExpiryDate = DateTime.now().add(const Duration(days: 30));
+    await _saveSubscriptionStatus();
+
+    // 스트림 업데이트
+    _subscriptionStatusController.add(_currentStatus);
+
+    debugPrint('✅ 테스트 ${isPremium ? "프리미엄" : "기본"} 구독 활성화');
+    return true;
+  }
+
+  // 상태 저장
+  Future<void> _saveSubscriptionStatus() async {
     try {
-      String productId;
-      switch (type) {
-        case SubscriptionType.basic:
-          productId = SubscriptionConstants.basicMonthlyProductId;
-          break;
-        case SubscriptionType.premium:
-          productId = SubscriptionConstants.premiumMonthlyProductId;
-          break;
-        default:
-          debugPrint('❌ 무료 플랜은 구매할 수 없습니다');
-          return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keySubscriptionStatus, _currentStatus.index.toString());
+
+      if (_subscriptionExpiryDate != null) {
+        await prefs.setString(
+          _keyExpiryDate,
+          _subscriptionExpiryDate!.toIso8601String()
+        );
       }
-      
-      // 상품 찾기
-      final productDetails = _products.firstWhere(
-        (product) => product.id == productId,
-        orElse: () => throw Exception('상품을 찾을 수 없습니다: $productId'),
-      );
-      
-      // 구매 요청
-      final PurchaseParam purchaseParam = PurchaseParam(
-        productDetails: productDetails,
-        applicationUserName: null,
-      );
-      
-      await _inAppPurchase.buyNonConsumable(purchaseParam: purchaseParam);
-      debugPrint('🔄 구독 구매 요청 시작됨: $productId');
     } catch (e) {
-      debugPrint('❌ 구독 구매 시작 중 오류: $e');
+      debugPrint('⚠️ 구독 상태 저장 실패: $e');
     }
   }
-  
-  /// 구독 복원
-  Future<void> restorePurchases() async {
+
+  // 크레딧 저장
+  Future<void> _saveRemainingCredits() async {
     try {
-      await _inAppPurchase.restorePurchases();
-      debugPrint('🔄 구독 복원 요청됨');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_keyCredits, _remainingCredits);
     } catch (e) {
-      debugPrint('❌ 구독 복원 중 오류: $e');
+      debugPrint('⚠️ 크레딧 저장 실패: $e');
     }
   }
-  
-  /// 출력 횟수 증가
-  Future<void> incrementGenerationCount() async {
-    _currentStatus = _currentStatus.incrementGenerationCount();
-    await _saveSubscriptionStatus();
-    _subscriptionStatusController.add(_currentStatus);
+
+  // 리셋 (테스트용)
+  Future<void> reset() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keySubscriptionStatus);
+      await prefs.remove(_keyCredits);
+      await prefs.remove(_keyExpiryDate);
+
+      _currentStatus = SubscriptionStatus.free;
+      _remainingCredits = 5;
+      _subscriptionExpiryDate = null;
+
+      // 스트림 업데이트
+      _subscriptionStatusController.add(_currentStatus);
+
+      debugPrint('🔄 구독 상태 리셋 완료');
+    } catch (e) {
+      debugPrint('⚠️ 구독 상태 리셋 실패: $e');
+    }
   }
-  
-  /// 리워드 광고로 무료 출력 추가
-  Future<void> addRewardedGeneration() async {
-    _currentStatus = _currentStatus.addRewardedGeneration();
-    await _saveSubscriptionStatus();
-    _subscriptionStatusController.add(_currentStatus);
+
+  // 현재 사용 중인 AI 모델 가져오기
+  String getCurrentModel() {
+    switch (_currentStatus) {
+      case SubscriptionStatus.premium:
+      case SubscriptionStatus.testPremium:
+        return SubscriptionConstants.premiumAiModel;
+      case SubscriptionStatus.basic:
+        return SubscriptionConstants.basicAiModel;
+      case SubscriptionStatus.free:
+      default:
+        return SubscriptionConstants.basicAiModel;
+    }
   }
-  
-  /// 현재 AI 모델 가져오기
-  String getCurrentAiModel() {
-    final plan = SubscriptionPlan.fromType(_currentStatus.subscriptionType);
-    return plan.aiModel;
-  }
-  
-  /// 리소스 해제
+
+  // 리소스 해제
   void dispose() {
-    _purchaseSubscription?.cancel();
-    _monthlyResetTimer?.cancel();
     _subscriptionStatusController.close();
   }
-}
 
-/// iOS 스토어킷 결제 큐 델리게이트
-class ExamplePaymentQueueDelegate implements SKPaymentQueueDelegateWrapper {
-  @override
-  bool shouldContinueTransaction(
-      SKPaymentTransactionWrapper transaction, SKStorefrontWrapper storefront) {
-    return true;
-  }
+  // 테스트 기능: 무료 크레딧 추가
+  Future<void> addFreeCredits(int count) async {
+    if (!_appConfig.isTestMode) {
+      debugPrint('⚠️ 프로덕션 환경에서 크레딧 추가 시도');
+      return;
+    }
 
-  @override
-  bool shouldShowPriceConsent() {
-    return false;
+    _remainingCredits += count;
+    await _saveRemainingCredits();
+    debugPrint('✅ $count 크레딧 추가됨. 현재: $_remainingCredits');
   }
 }
 
@@ -353,38 +282,73 @@ class ExamplePaymentQueueDelegate implements SKPaymentQueueDelegateWrapper {
 extension SubscriptionServiceExtensions on SubscriptionService {
   /// 무료 출력 횟수가 남아있는지 확인
   bool get hasFreeGenerationsLeft {
-    if (_currentStatus.subscriptionType != SubscriptionType.free) {
-      return true; // 유료 구독은 제한 없음
+    // 테스트 모드에서는 항상 true
+    if (_featureFlags.unlimitedChunkGeneration) {
+      return true;
     }
-    return _currentStatus.generationCount < SubscriptionConstants.freeGenerationLimit;
+
+    // 유료 구독은 제한 없음
+    if (isPremium) {
+      return true;
+    }
+
+    // 크레딧이 남아있는지 확인
+    return remainingCredits > 0;
   }
-  
+
   /// 사용자가 테스트 기능을 사용할 수 있는지 확인
   bool get canUseTestFeature {
-    final plan = SubscriptionPlan.fromType(_currentStatus.subscriptionType);
-    return plan.allowsTest;
+    // 테스트 모드에서는 항상 true
+    if (_appConfig.isTestMode) {
+      return true;
+    }
+
+    // 프리미엄 사용자에게만 허용
+    return _currentStatus == SubscriptionStatus.premium;
   }
-  
+
   /// 사용자가 PDF 내보내기 기능을 사용할 수 있는지 확인
   bool get canUsePdfExport {
-    final plan = SubscriptionPlan.fromType(_currentStatus.subscriptionType);
-    return plan.allowsPdfExport;
+    // 테스트 모드에서는 항상 true
+    if (_featureFlags.enablePremiumFeatures) {
+      return true;
+    }
+
+    // 유료 구독에게만 허용
+    return _currentStatus == SubscriptionStatus.premium ||
+           _currentStatus == SubscriptionStatus.basic;
   }
-  
+
   /// 광고가 표시되어야 하는지 확인
   bool get shouldShowAds {
-    final plan = SubscriptionPlan.fromType(_currentStatus.subscriptionType);
-    return plan.hasAds;
+    // 테스트 모드 또는 광고 비활성화 모드
+    if (!_appConfig.enableAds || _featureFlags.enablePremiumFeatures) {
+      return false;
+    }
+
+    // 프리미엄 사용자는 광고 없음
+    return _currentStatus == SubscriptionStatus.free;
   }
-  
+
   /// 단어 갯수 제한 확인
-  int get minWordLimit {
-    final plan = SubscriptionPlan.fromType(_currentStatus.subscriptionType);
-    return plan.wordMinLimit;
-  }
-  
+  int get minWordLimit => 5; // 모든 사용자 공통
+
   int get maxWordLimit {
-    final plan = SubscriptionPlan.fromType(_currentStatus.subscriptionType);
-    return plan.wordMaxLimit;
+    // 테스트 모드에서는 최대치
+    if (_featureFlags.enablePremiumFeatures) {
+      return 25;
+    }
+
+    // 구독 유형에 따라 다른 제한
+    switch (_currentStatus) {
+      case SubscriptionStatus.premium:
+      case SubscriptionStatus.testPremium:
+        return SubscriptionConstants.premiumWordMaxLimit;
+      case SubscriptionStatus.basic:
+        return SubscriptionConstants.basicWordMaxLimit;
+      case SubscriptionStatus.free:
+      default:
+        return SubscriptionConstants.freeWordMaxLimit;
+    }
   }
 }

@@ -8,6 +8,9 @@ import 'package:chunk_up/domain/models/chunk.dart';
 import 'package:chunk_up/domain/models/word.dart';
 import 'package:chunk_up/core/theme/app_theme.dart';
 import 'package:chunk_up/core/services/route_service.dart';
+import 'package:chunk_up/core/config/app_config.dart';
+import 'package:chunk_up/core/config/feature_flags.dart';
+import 'package:chunk_up/presentation/widgets/debug_panel.dart'; // 디버그 패널 추가
 import 'chunk_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -93,6 +96,8 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 디버그 패널 추가 (개발 환경에서만 표시됨)
+                const DebugPanel(),
                 // Welcome section with app logo
                 Container(
                   width: double.infinity,
