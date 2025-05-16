@@ -57,5 +57,23 @@ env.g.dart
 /ios/build/
 /android/build/
 **/build/
+build/
 *.log
 *.log.*
+
+# 대용량 바이너리 파일
+*.so
+*.apk
+*.aab
+*.ipa
+*.jar
+*.zip
+*.gz
+*.tar
+*.bin
+*.dill
+*.profraw
+*.profdata
+*.dart.js
+*.js.deps
+*.js.map
