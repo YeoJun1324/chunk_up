@@ -37,17 +37,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _appVersion = '';
   final String _developerEmail = 'support@chunkup.app';
 
-  // API 키 저장용 필드
-  String _apiKey = '';
-  bool _isLoadingApiKey = true;
-  final bool _obscureApiKey = true;
+  // 기타 설정 필드
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _loadAppInfo();
-    _loadApiKey();
   }
 
   Future<void> _loadSettings() async {
@@ -84,102 +80,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _loadApiKey() async {
-    setState(() {
-      _isLoadingApiKey = true;
-    });
-
-    try {
-      final key = await ApiService.apiKey;
-      setState(() {
-        _apiKey = key ?? '';
-        _isLoadingApiKey = false;
-      });
-    } catch (e) {
-      print('API 키 로드 오류: $e');
-      setState(() {
-        _apiKey = '';
-        _isLoadingApiKey = false;
-      });
-    }
-  }
-
-  Future<void> _saveApiKey(String newKey) async {
-    try {
-      await ApiService.saveApiKey(newKey);
-      setState(() {
-        _apiKey = newKey;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('API 키가 저장되었습니다')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('API 키 저장 중 오류 발생: $e')),
-      );
-    }
-  }
-
-  void _showApiKeyDialog() {
-    final TextEditingController controller = TextEditingController(text: _apiKey);
-    bool localObscureApiKey = _obscureApiKey;
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Claude API 키 설정'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Anthropic Claude API 키를 입력하세요. 키는 안전하게 기기에 저장됩니다.',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(
-                      hintText: 'sk-ant-api....',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(localObscureApiKey ? Icons.visibility : Icons.visibility_off),
-                        onPressed: () {
-                          setStateDialog(() {
-                            localObscureApiKey = !localObscureApiKey;
-                          });
-                        },
-                      ),
-                    ),
-                    obscureText: localObscureApiKey,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'API 키는 https://console.anthropic.com 에서 발급받을 수 있습니다.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('취소'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    _saveApiKey(controller.text.trim());
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('저장'),
-                ),
-              ],
-            );
-          }
-      ),
-    );
-  }
 
   Future<void> _showResetConfirmationDialog() async {
     return showDialog<void>(
@@ -714,27 +614,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: _showResetConfirmationDialog,
             ),
 
-            // API 설정 섹션
+            // AI 모델 섹션
             const Divider(),
             const ListTile(
               title: Text(
-                'API 설정',
+                'AI 모델',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
               ),
-            ),
-            ListTile(
-              title: const Text('Claude API 키 설정'),
-              subtitle: Text(_isLoadingApiKey
-                  ? '로드 중...'
-                  : _apiKey.isEmpty
-                  ? 'API 키가 설정되지 않았습니다'
-                  : '${_apiKey.substring(0, 4)}...${_apiKey.length > 4 ? _apiKey.substring(_apiKey.length - 4) : ""}'),
-              leading: const Icon(Icons.vpn_key),
-              trailing: const Icon(Icons.edit),
-              onTap: _showApiKeyDialog,
             ),
             ListTile(
               title: const Text('AI 모델 성능 테스트'),

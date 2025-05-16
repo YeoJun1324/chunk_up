@@ -10,6 +10,7 @@ import 'package:chunk_up/data/datasources/remote/api_service.dart' as remote;
 import 'package:chunk_up/core/services/cache_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:chunk_up/core/constants/subscription_constants.dart';
+import 'package:chunk_up/core/services/embedded_api_service.dart';
 
 class ApiService {
   static const String _apiKeyStorageKey = 'api_key';
@@ -49,8 +50,21 @@ class ApiService {
 
   /// Get the API key from storage (static convenience method)
   static Future<String?> getApiKey() async {
-    final service = LocalStorageService();
-    return await service.getString(_apiKeyStorageKey);
+    try {
+      // 먼저 내장 API 키 서비스에서 키 가져오기 시도
+      final embeddedKey = await EmbeddedApiService.getApiKey();
+      if (embeddedKey != null && embeddedKey.isNotEmpty) {
+        return embeddedKey;
+      }
+
+      // 내장 키가 없으면 스토리지에서 가져오기
+      final service = LocalStorageService();
+      return await service.getString(_apiKeyStorageKey);
+    } catch (e) {
+      debugPrint('API 키 가져오기 오류: $e');
+      // 오류 발생 시 null 반환하여 API 키 없음 상태로 처리
+      return null;
+    }
   }
 
   /// Save the API key to storage

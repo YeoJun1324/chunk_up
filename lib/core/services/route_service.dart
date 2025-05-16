@@ -69,7 +69,9 @@ class RouteService {
       },
       RouteNames.stats: (context) => const LearningStatsScreen(),
       RouteNames.import: (context) => const ImportScreen(),
-      RouteNames.apiKeySetup: (context) => const ApiKeySetupScreen(isInitialSetup: true),
+      // API 키 설정 화면은 유지하되, 출시 버전에서는 사용되지 않음
+      // 개발 환경에서만 화면 이동이 가능하도록 함
+      RouteNames.apiKeySetup: (context) => const MainScreen(key: MainScreen.globalKey),
       RouteNames.wordListExport: (context) => const WordListExportScreen(),
       RouteNames.modelTest: (context) => const ModelTestScreen(), // Added model test route
       RouteNames.subscription: (context) => const SubscriptionScreen(), // Added subscription route

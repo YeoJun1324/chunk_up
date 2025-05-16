@@ -29,12 +29,16 @@ import 'core/services/navigation_service.dart';
 import 'core/services/route_service.dart';
 import 'core/services/review_service.dart'; // 복습 알림 서비스 추가
 import 'core/services/notification_service.dart'; // 알림 서비스 추가
+import 'core/services/embedded_api_service.dart'; // 내장 API 키 서비스 추가
 import 'di/dependency_injection.dart'; // 다른 파일에서 참조하는 이름을 유지
 import 'core/constants/route_names.dart';
 import 'core/theme/app_theme.dart'; // 앱 테마 정의 추가
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 내장 API 키 초기화 (출시 버전에서는 항상 API 키 자동 설정)
+  await EmbeddedApiService.initializeApiSettings();
 
   // 의존성 주입 설정
   await setupServiceLocator();
@@ -75,9 +79,8 @@ void main() async {
 
   // 글로벌 에러 처리 Zone
   runZonedGuarded(() async {
-    // API 키 존재 여부 확인
-    final apiKey = await ApiService.getApiKey(); // 스태틱 메서드 사용
-    final bool hasApiKey = apiKey != null && apiKey.isNotEmpty;
+    // 내장 API 키를 사용하므로 항상 API 키가 존재함
+    final bool hasApiKey = true;
 
     runApp(
       // RiverpodContainer로 감싸서 Riverpod Provider 사용 가능하게 함
