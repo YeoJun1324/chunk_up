@@ -35,7 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // App info
   String _appVersion = '';
-  final String _developerEmail = 'support@chunkup.app';
+  final String _developerEmail = 'duwns051004@gmail.com';
 
   // 기타 설정 필드
 

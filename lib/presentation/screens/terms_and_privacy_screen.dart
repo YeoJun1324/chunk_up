@@ -199,8 +199,7 @@ class TermsOfServiceContent extends StatelessWidget {
           '제10조 (연락처)',
           '''회사 연락처 및 문의처는 다음과 같습니다:
 
-1. 일반 문의: support@chunkup.app
-2. 개인정보 관련 문의: privacy@chunkup.app''',
+이메일: duwns051004@gmail.com''',
         ),
         _buildSection(
           '제11조 (기타)',
@@ -289,10 +288,9 @@ class PrivacyPolicyContent extends StatelessWidget {
         _buildSection(
           '8. 개인정보 보호책임자 및 데이터 삭제 요청',
           '''개인정보 보호에 관한 문의사항은 아래 연락처로 문의해 주시기 바랍니다.
-- 개인정보 관련 문의: privacy@chunkup.app
-- 일반 문의 및 지원: support@chunkup.app
+- 이메일: duwns051004@gmail.com
 
-사용자는 privacy@chunkup.app 이메일로 계정 및 관련 데이터 삭제를 요청할 수 있습니다. 요청 시 다음 정보를 포함해 주세요:
+사용자는 위 이메일로 계정 및 관련 데이터 삭제를 요청할 수 있습니다. 요청 시 다음 정보를 포함해 주세요:
 1. 제목에 "데이터 삭제 요청" 포함
 2. 사용 중인 기기 모델명
 3. 앱 설치일(대략적인 날짜)
