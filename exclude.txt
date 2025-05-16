@@ -1,0 +1,13 @@
+.git\
+build\
+.dart_tool\
+.gradle\
+.idea\
+*.log
+*.lock
+*.bak
+node_modules\
+.DS_Store
+*.iml
+*.iws
+*.ipr

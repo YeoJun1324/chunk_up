@@ -1,0 +1,37 @@
+<variant
+    name="release"
+    package="com.example.chunk_vocab"
+    minSdkVersion="23"
+    targetSdkVersion="35"
+    mergedManifest="C:\chunk_up\android\build\app\intermediates\merged_manifest\release\processReleaseMainManifest\AndroidManifest.xml"
+    proguardFiles="build\intermediates\default_proguard_files\global\proguard-android-optimize.txt-8.7.0;C:\Program Files\flutter_windows_3.29.3-stable\flutter\packages\flutter_tools\gradle\flutter_proguard_rules.pro;proguard-rules.pro;C:\chunk_up\android\build\app\intermediates\default_proguard_files\global\proguard-android-optimize.txt-8.7.0;proguard-rules.pro"
+    partialResultsDir="C:\chunk_up\android\build\app\intermediates\lint_vital_partial_results\release\lintVitalAnalyzeRelease\out"
+    desugaredMethodsFiles="C:\Users\ROG Zephyrus G15\.gradle\caches\8.10.2\transforms\5249679a87a7ea590ab439ba79a1a509\transformed\desugar_jdk_libs_configuration-2.1.4-desugar-lint.txt;C:\Users\ROG Zephyrus G15\.gradle\caches\8.10.2\transforms\1c5f6274be2f53383e2010b5784d89f7\transformed\D8BackportedDesugaredMethods.txt">
+  <buildFeatures
+      coreLibraryDesugaring="true"
+      namespacing="REQUIRED"/>
+  <sourceProviders>
+    <sourceProvider
+        manifests="src\main\AndroidManifest.xml"
+        javaDirectories="src\main\java;src\release\java;src\main\kotlin;src\release\kotlin"
+        resDirectories="src\main\res;src\release\res"
+        assetsDirectories="src\main\assets;src\release\assets"/>
+  </sourceProviders>
+  <testSourceProviders>
+  </testSourceProviders>
+  <testFixturesSourceProviders>
+  </testFixturesSourceProviders>
+  <manifestPlaceholders>
+    <placeholder
+        name="applicationName"
+        value="android.app.Application" />
+  </manifestPlaceholders>
+  <artifact
+      classOutputs="C:\chunk_up\android\build\app\intermediates\javac\release\compileReleaseJavaWithJavac\classes;C:\chunk_up\android\build\app\tmp\kotlin-classes\release;C:\chunk_up\android\build\app\kotlinToolingMetadata;C:\chunk_up\android\build\app\intermediates\compile_and_runtime_not_namespaced_r_class_jar\release\processReleaseResources\R.jar"
+      type="MAIN"
+      applicationId="com.example.chunk_vocab"
+      generatedSourceFolders="C:\chunk_up\android\build\app\generated\ap_generated_sources\release\out"
+      generatedResourceFolders="C:\chunk_up\android\build\app\generated\res\resValues\release"
+      desugaredMethodsFiles="C:\Users\ROG Zephyrus G15\.gradle\caches\8.10.2\transforms\5249679a87a7ea590ab439ba79a1a509\transformed\desugar_jdk_libs_configuration-2.1.4-desugar-lint.txt;C:\Users\ROG Zephyrus G15\.gradle\caches\8.10.2\transforms\1c5f6274be2f53383e2010b5784d89f7\transformed\D8BackportedDesugaredMethods.txt">
+  </artifact>
+</variant>

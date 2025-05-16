@@ -1,0 +1,66 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # Error prevention rules
+    avoid_relative_lib_imports: error
+    prefer_relative_imports: ignore
+    always_declare_return_types: error 
+    avoid_empty_else: error
+    avoid_return_types_on_setters: error
+    avoid_types_as_parameter_names: error
+    control_flow_in_finally: error
+    empty_statements: error
+    prefer_void_to_null: error
+    unnecessary_statements: error
+
+    # Architecture rules
+    implementation_imports: error
+    depend_on_referenced_packages: error
+    package_api_docs: warning
+    
+    # Style rules
+    camel_case_types: error
+    library_names: error
+    file_names: error
+    library_prefixes: error
+    non_constant_identifier_names: error
+    constant_identifier_names: error
+    avoid_catching_errors: error
+    
+    # Flutter specific
+    use_key_in_widget_constructors: error
+    always_use_package_imports: error
+
+linter:
+  rules:
+    # Architecture rules
+    - always_use_package_imports
+    - avoid_relative_lib_imports
+    - avoid_web_libraries_in_flutter
+    - depend_on_referenced_packages
+    - avoid_dynamic_calls
+    - avoid_function_literals_in_foreach_calls
+
+    # Error prevention
+    - avoid_empty_else
+    - avoid_return_types_on_setters
+    - avoid_types_as_parameter_names
+    - cancel_subscriptions
+    - close_sinks
+    - empty_statements
+    - prefer_void_to_null
+    - unnecessary_statements
+    
+    # Style
+    - always_declare_return_types
+    - camel_case_types
+    - constant_identifier_names
+    - file_names
+    - implementation_imports
+    - library_names
+    - library_prefixes
+    - non_constant_identifier_names
+    - package_api_docs
+    - package_names
+    - use_key_in_widget_constructors
