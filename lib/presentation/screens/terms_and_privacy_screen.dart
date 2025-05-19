@@ -37,8 +37,13 @@ class _TermsAndPrivacyScreenState extends State<TermsAndPrivacyScreen>
           ],
           labelColor: Theme.of(context).brightness == Brightness.dark
               ? Colors.white
-              : Colors.black,
+              : Colors.white, // 선택된 탭은 항상 흰색으로
+          unselectedLabelColor: Theme.of(context).brightness == Brightness.dark
+              ? Colors.white70
+              : Colors.grey[400], // 선택되지 않은 탭은 회색으로
           indicatorColor: Colors.orange,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
         ),
       ),
       body: TabBarView(
@@ -199,7 +204,7 @@ class TermsOfServiceContent extends StatelessWidget {
           '제10조 (연락처)',
           '''회사 연락처 및 문의처는 다음과 같습니다:
 
-이메일: duwns051004@gmail.com''',
+이메일: chunk_up@naver.com''',
         ),
         _buildSection(
           '제11조 (기타)',
@@ -288,7 +293,7 @@ class PrivacyPolicyContent extends StatelessWidget {
         _buildSection(
           '8. 개인정보 보호책임자 및 데이터 삭제 요청',
           '''개인정보 보호에 관한 문의사항은 아래 연락처로 문의해 주시기 바랍니다.
-- 이메일: duwns051004@gmail.com
+- 이메일: chunk_up@naver.com
 
 사용자는 위 이메일로 계정 및 관련 데이터 삭제를 요청할 수 있습니다. 요청 시 다음 정보를 포함해 주세요:
 1. 제목에 "데이터 삭제 요청" 포함

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:chunk_up/core/services/subscription_service.dart';
 import 'package:chunk_up/core/services/ad_service.dart';
 import 'package:chunk_up/core/constants/subscription_constants.dart';
-import 'package:chunk_up/domain/models/subscription_plan.dart';
+import 'package:chunk_up/domain/models/subscription_plan.dart' as domain;
 import 'package:chunk_up/di/service_locator.dart';
 import 'package:chunk_up/data/services/storage/local_storage_service.dart'; // StorageService 의존성 추가
 
@@ -24,7 +24,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool _servicesInitialized = false;
 
   // 서비스 초기화 실패 시 사용할 임시 기본 상태
-  final SubscriptionStatus _fallbackStatus = SubscriptionStatus.defaultFree();
+  final domain.SubscriptionStatus _fallbackStatus = domain.SubscriptionStatus.defaultFree();
   
   @override
   void initState() {
@@ -39,9 +39,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         // 서비스가 없으면 직접 등록 시도
         debugPrint('SubscriptionService가 등록되어 있지 않습니다. 등록 시도...');
         try {
-          getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService(
-            storageService: getIt<StorageService>(),
-          ));
+          // 기본 생성자를 사용 (storageService 파라미터 없음)
+          getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
           debugPrint('SubscriptionService 등록 성공!');
         } catch (e) {
           debugPrint('SubscriptionService 등록 실패: $e');
@@ -111,7 +110,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
     
     // 서비스가 초기화되지 않았을 경우 대비
-    return StreamBuilder<SubscriptionStatus>(
+    return StreamBuilder<domain.SubscriptionStatus>(
       stream: _subscriptionService?.subscriptionStatusStream,
       initialData: _subscriptionService?.currentStatus ?? _fallbackStatus,
       builder: (context, snapshot) {
@@ -122,7 +121,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         }
         
         final currentStatus = snapshot.data ?? _subscriptionService?.currentStatus ?? _fallbackStatus;
-        final currentPlan = SubscriptionPlan.fromType(currentStatus.subscriptionType);
+        final currentPlan = domain.SubscriptionPlan.fromType(currentStatus.subscriptionType);
         
         return Stack(
           children: [
@@ -148,16 +147,16 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   const SizedBox(height: 16),
                   
                   // 플랜 카드들
-                  _buildPlanCard(SubscriptionPlan.free, currentStatus),
+                  _buildPlanCard(domain.SubscriptionPlan.free, currentStatus),
                   const SizedBox(height: 12),
-                  _buildPlanCard(SubscriptionPlan.basic, currentStatus),
+                  _buildPlanCard(domain.SubscriptionPlan.basic, currentStatus),
                   const SizedBox(height: 12),
-                  _buildPlanCard(SubscriptionPlan.premium, currentStatus),
+                  _buildPlanCard(domain.SubscriptionPlan.premium, currentStatus),
                   
                   const SizedBox(height: 24),
                   
                   // 무료 플랜 추가 생성 옵션 (광고 시청)
-                  if (currentStatus.subscriptionType == SubscriptionType.free)
+                  if (currentStatus.subscriptionType == domain.SubscriptionType.free)
                     ElevatedButton.icon(
                       onPressed: (_adService?.isRewardedAdLoaded ?? false) ? _watchAdForFreeGeneration : null,
                       icon: const Icon(Icons.video_library),
@@ -227,7 +226,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
   
-  Widget _buildCurrentSubscriptionCard(SubscriptionStatus status, SubscriptionPlan currentPlan) {
+  Widget _buildCurrentSubscriptionCard(domain.SubscriptionStatus status, domain.SubscriptionPlan currentPlan) {
     final expiryText = status.expiryDate != null 
         ? '만료일: ${_formatDate(status.expiryDate!)}'
         : '';
@@ -236,7 +235,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     
     return Card(
       elevation: 4,
-      color: Colors.orange.shade50,
+      color: Theme.of(context).brightness == Brightness.dark
+          ? Colors.orange.shade900.withOpacity(0.3) // 다크 모드에서는 어두운 오렌지 배경
+          : Colors.orange.shade50,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -259,11 +260,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   ),
                 ),
                 const Spacer(),
-                if (status.subscriptionType != SubscriptionType.free && status.expiryDate != null)
+                if (status.subscriptionType != domain.SubscriptionType.free && status.expiryDate != null)
                   Text(
                     expiryText,
                     style: TextStyle(
-                      color: Colors.orange.shade800,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.orange.shade300 // 다크 모드에서는 밝은 오렌지
+                          : Colors.orange.shade800,
                       fontSize: 12,
                     ),
                   ),
@@ -278,22 +281,35 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 color: Theme.of(context).brightness == Brightness.dark
                     ? Colors.white
                     : Colors.black87,
+                shadows: Theme.of(context).brightness == Brightness.dark
+                    ? [Shadow(color: Colors.black, blurRadius: 2)] // 다크 모드에서는 텍스트 가독성을 위해 그림자 추가
+                    : null,
               ),
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
               value: remainingGenerations / currentPlan.generationLimit,
-              backgroundColor: Colors.grey.shade300,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey.shade800 // 다크 모드에서는 더 어두운 배경색
+                  : Colors.grey.shade300,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).brightness == Brightness.dark
+                    ? Colors.orange.shade300 // 다크 모드에서는 밝은 오렌지
+                    : Colors.orange,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
               '현재 사용 중인 AI 모델: ${_getModelDisplayName(currentPlan.aiModel)}',
               style: TextStyle(
                 fontSize: 14,
+                fontWeight: FontWeight.w500, // 약간 더 두껍게
                 color: Theme.of(context).brightness == Brightness.dark
                     ? Colors.white
                     : Colors.black87,
+                shadows: Theme.of(context).brightness == Brightness.dark
+                    ? [Shadow(color: Colors.black, blurRadius: 1.5)] // 다크 모드에서는 텍스트 가독성을 위해 그림자 추가
+                    : null,
               ),
             ),
             const SizedBox(height: 8),
@@ -301,9 +317,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               '단어 범위: ${currentPlan.wordMinLimit}~${currentPlan.wordMaxLimit}개',
               style: TextStyle(
                 fontSize: 14,
+                fontWeight: FontWeight.w500, // 약간 더 두껍게
                 color: Theme.of(context).brightness == Brightness.dark
                     ? Colors.white
                     : Colors.black87,
+                shadows: Theme.of(context).brightness == Brightness.dark
+                    ? [Shadow(color: Colors.black, blurRadius: 1.5)] // 다크 모드에서는 텍스트 가독성을 위해 그림자 추가
+                    : null,
               ),
             ),
           ],
@@ -312,7 +332,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
   
-  Widget _buildPlanCard(SubscriptionPlan plan, SubscriptionStatus currentStatus) {
+  Widget _buildPlanCard(domain.SubscriptionPlan plan, domain.SubscriptionStatus currentStatus) {
     final isCurrentPlan = plan.type == currentStatus.subscriptionType;
     
     return Card(
@@ -385,8 +405,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               plan.allowsTest ? '사용 가능' : '사용 불가'
             ),
             _buildPlanFeature(
-              'PDF 내보내기', 
+              'PDF 내보내기',
               plan.allowsPdfExport ? '사용 가능' : '사용 불가'
+            ),
+            _buildPlanFeature(
+              '캐릭터 생성',
+              plan.allowsCharacterCreation ? '사용 가능' : '사용 불가'
             ),
             
             const SizedBox(height: 16),
@@ -419,11 +443,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
   
   Widget _buildPlanFeature(String name, String value) {
+    // 기능이 사용 불가한지 확인
+    final bool isNotAvailable = value == '사용 불가' || value == '있음';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
         children: [
-          const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+          Icon(
+            isNotAvailable ? Icons.cancel : Icons.check_circle_outline,
+            size: 16,
+            color: isNotAvailable ? Colors.red : Colors.green
+          ),
           const SizedBox(width: 8),
           Text(
             name,
@@ -435,7 +466,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           const SizedBox(width: 4),
           Text(
             value,
-            style: const TextStyle(fontSize: 14),
+            style: TextStyle(
+              fontSize: 14,
+              color: isNotAvailable ? Colors.red.shade700 : null,
+            ),
           ),
         ],
       ),
@@ -443,7 +477,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
   
   /// 구독 플랜 구매
-  Future<void> _subscribeToPlan(SubscriptionType planType) async {
+  Future<void> _subscribeToPlan(domain.SubscriptionType planType) async {
     if (_subscriptionService == null) {
       setState(() {
         _errorMessage = '서비스가 초기화되지 않았습니다. 앱을 다시 시작해주세요.';
@@ -451,7 +485,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return;
     }
 
-    if (planType == SubscriptionType.free) {
+    if (planType == domain.SubscriptionType.free) {
       // 무료 플랜은 구매 필요 없음
       setState(() => _errorMessage = '');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -574,6 +608,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return 'Claude 3.5 Haiku (기본)';
     } else if (modelId == SubscriptionConstants.premiumAiModel) {
       return 'Claude 3.7 Sonnet (고급)';
+    } else if (modelId == SubscriptionConstants.freeAiModel) {
+      return 'Claude 3 Haiku (무료)';
     }
     return modelId;
   }

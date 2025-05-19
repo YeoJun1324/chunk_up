@@ -514,32 +514,42 @@ class _WordListExportScreenState extends State<WordListExportScreen> {
       // 각 단락 내용 추가
       int chunkIndex = 1;
       for (var chunk in chunks) {
+        // footerBuilder를 사용하는 테마 정의
+        final myPageTheme = pw.PageTheme(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(24),
+          theme: pw.ThemeData.withFont(
+            base: regularFont,
+            bold: boldFont,
+            italic: italicFont,
+          ),
+          buildBackground: (context) => pw.Container(),
+          buildForeground: (context) {
+            if (context.pageNumber > 0) { // 첫 페이지가 아닐 때만 표시
+              return pw.Positioned(
+                bottom: 10,
+                left: 0,
+                right: 0,
+                child: pw.Text(
+                  '페이지 ${context.pageNumber}/${context.pagesCount}',
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: 9,
+                    color: PdfColors.grey600,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+              );
+            } else {
+              return pw.Container();
+            }
+          },
+        );
+
         pdf.addPage(
           pw.MultiPage(
-            pageFormat: PdfPageFormat.a4,
-            // 페이지 여백을 조정하여 내용이 더 효율적으로 배치되도록 함
-            margin: const pw.EdgeInsets.all(24),
-            // 테이블이 페이지 경계에서 더 자연스럽게 분할되도록 여백 조정
-            pageTheme: pw.PageTheme(
-              theme: pw.ThemeData.withFont(
-                base: regularFont,
-                bold: boldFont,
-                italic: italicFont,
-              ),
-            ),
-            footer: (context) => pw.Padding(
-              padding: const pw.EdgeInsets.only(top: 10),
-              child: pw.Text(
-                '페이지 ${context.pageNumber}/${context.pagesCount}',
-                style: pw.TextStyle(
-                  font: regularFont,
-                  fontSize: 9,
-                  color: PdfColors.grey600,
-                ),
-                textAlign: pw.TextAlign.center,
-              ),
-            ),
-            // 페이지 사이의 내용 분할을 위한 설정
+            // 페이지 테마만 사용하고 다른 속성은 제거
+            pageTheme: myPageTheme,
             maxPages: 100,
             build: (pw.Context context) {
               return [

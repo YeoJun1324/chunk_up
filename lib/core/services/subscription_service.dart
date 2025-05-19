@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chunk_up/core/config/app_config.dart';
 import 'package:chunk_up/core/config/feature_flags.dart';
 import 'package:chunk_up/core/constants/subscription_constants.dart';
-import 'package:chunk_up/domain/models/subscription_plan.dart';
+import 'package:chunk_up/domain/models/subscription_plan.dart' as domain;
 import 'package:chunk_up/data/services/storage/local_storage_service.dart';
 
 // 내부 테스트를 위한 추가 임포트
@@ -16,8 +16,8 @@ import 'package:chunk_up/data/services/storage/local_storage_service.dart';
 // import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart'; // 테스트 시 주석 해제
 // import 'package:in_app_purchase_storekit/store_kit_wrappers.dart'; // 테스트 시 주석 해제
 
-/// 구독 상태
-enum SubscriptionStatus {
+/// 내부 테스트용 구독 상태 - 원래 모델과 충돌을 방지하기 위해 이름 변경
+enum TestSubscriptionStatus {
   free,         // 무료
   basic,        // 기본 구독
   premium,      // 프리미엄 구독
@@ -37,13 +37,17 @@ class SubscriptionService {
   final StorageService? _storageService; // 선택적 사용
 
   // 상태 변수
-  SubscriptionStatus _currentStatus = SubscriptionStatus.free;
+  TestSubscriptionStatus _currentStatus = TestSubscriptionStatus.free;
   int _remainingCredits = 5;
   DateTime? _subscriptionExpiryDate;
 
   // 구독 상태 변경 이벤트를 위한 스트림 컨트롤러
-  final _subscriptionStatusController = StreamController<SubscriptionStatus>.broadcast();
-  Stream<SubscriptionStatus> get subscriptionStatusStream => _subscriptionStatusController.stream;
+  final _subscriptionStatusController = StreamController<domain.SubscriptionStatus>.broadcast();
+  Stream<domain.SubscriptionStatus> get subscriptionStatusStream => _subscriptionStatusController.stream;
+
+  // 외부 코드와의 호환성을 위한 속성
+  domain.SubscriptionStatus? _currentExternalStatus;
+  domain.SubscriptionStatus get currentStatus => _currentExternalStatus ?? domain.SubscriptionStatus.defaultFree();
 
   // 설정 키
   static const String _keySubscriptionStatus = 'subscription_status';
@@ -77,12 +81,12 @@ class SubscriptionService {
   Future<void> _initialize() async {
     // 테스트 모드 설정
     if (_featureFlags.enablePremiumFeatures) {
-      _currentStatus = SubscriptionStatus.testPremium;
+      _currentStatus = TestSubscriptionStatus.testPremium;
       _remainingCredits = _appConfig.freeCreditsForTesters;
       _subscriptionExpiryDate = DateTime.now().add(const Duration(days: 365));
 
-      // 스트림 업데이트
-      _subscriptionStatusController.add(_currentStatus);
+      // 외부 상태 생성 및 스트림 업데이트
+      _updateExternalStatusAndNotify();
 
       debugPrint('👑 테스트 프리미엄 모드 활성화');
       return;
@@ -96,8 +100,8 @@ class SubscriptionService {
       final statusStr = prefs.getString(_keySubscriptionStatus);
       if (statusStr != null) {
         final statusIndex = int.tryParse(statusStr);
-        if (statusIndex != null && statusIndex >= 0 && statusIndex < SubscriptionStatus.values.length) {
-          _currentStatus = SubscriptionStatus.values[statusIndex];
+        if (statusIndex != null && statusIndex >= 0 && statusIndex < TestSubscriptionStatus.values.length) {
+          _currentStatus = TestSubscriptionStatus.values[statusIndex];
         }
       }
 
@@ -111,29 +115,59 @@ class SubscriptionService {
 
         // 만료 확인
         if (_subscriptionExpiryDate!.isBefore(DateTime.now())) {
-          _currentStatus = SubscriptionStatus.free;
+          _currentStatus = TestSubscriptionStatus.free;
           _subscriptionExpiryDate = null;
         }
       }
 
-      // 스트림 업데이트
-      _subscriptionStatusController.add(_currentStatus);
+      // 외부 상태 생성 및 스트림 업데이트
+      _updateExternalStatusAndNotify();
 
       debugPrint('💳 구독 상태 로드: $_currentStatus, 남은 크레딧: $_remainingCredits');
     } catch (e) {
       debugPrint('⚠️ 구독 정보 로드 실패: $e');
-      _currentStatus = SubscriptionStatus.free;
+      _currentStatus = TestSubscriptionStatus.free;
       _remainingCredits = 5;
 
-      // 스트림 업데이트
-      _subscriptionStatusController.add(_currentStatus);
+      // 외부 상태 생성 및 스트림 업데이트
+      _updateExternalStatusAndNotify();
     }
+  }
+
+  /// 내부 상태를 외부 SubscriptionStatus로 변환하여 스트림에 알림
+  void _updateExternalStatusAndNotify() {
+    // 내부 상태를 외부 상태 형식으로 변환
+    domain.SubscriptionType externalType;
+    switch (_currentStatus) {
+      case TestSubscriptionStatus.basic:
+        externalType = domain.SubscriptionType.basic;
+        break;
+      case TestSubscriptionStatus.premium:
+      case TestSubscriptionStatus.testPremium:
+        externalType = domain.SubscriptionType.premium;
+        break;
+      case TestSubscriptionStatus.free:
+      default:
+        externalType = domain.SubscriptionType.free;
+        break;
+    }
+
+    // 외부 상태 객체 생성
+    _currentExternalStatus = domain.SubscriptionStatus(
+      subscriptionType: externalType,
+      expiryDate: _subscriptionExpiryDate,
+      generationCount: isPremium ? 0 : 5 - _remainingCredits,
+      lastGenerationResetDate: DateTime.now(),
+    );
+
+    // 스트림 업데이트
+    _subscriptionStatusController.add(_currentExternalStatus!);
   }
   
   // 상태 접근자
-  SubscriptionStatus get status => _currentStatus;
-  bool get isPremium => _currentStatus == SubscriptionStatus.premium ||
-                        _currentStatus == SubscriptionStatus.testPremium;
+  TestSubscriptionStatus get status => _currentStatus;
+  bool get isPremium => _currentStatus == TestSubscriptionStatus.premium ||
+                        _currentStatus == TestSubscriptionStatus.testPremium;
   int get remainingCredits => isPremium ? 999 : _remainingCredits;
   DateTime? get expiryDate => _subscriptionExpiryDate;
 
@@ -186,13 +220,13 @@ class SubscriptionService {
     }
 
     _currentStatus = isPremium ?
-      SubscriptionStatus.testPremium : SubscriptionStatus.basic;
+      TestSubscriptionStatus.testPremium : TestSubscriptionStatus.basic;
 
     _subscriptionExpiryDate = DateTime.now().add(const Duration(days: 30));
     await _saveSubscriptionStatus();
 
-    // 스트림 업데이트
-    _subscriptionStatusController.add(_currentStatus);
+    // 외부 상태 업데이트 및 스트림 알림
+    _updateExternalStatusAndNotify();
 
     debugPrint('✅ 테스트 ${isPremium ? "프리미엄" : "기본"} 구독 활성화');
     return true;
@@ -233,12 +267,12 @@ class SubscriptionService {
       await prefs.remove(_keyCredits);
       await prefs.remove(_keyExpiryDate);
 
-      _currentStatus = SubscriptionStatus.free;
+      _currentStatus = TestSubscriptionStatus.free;
       _remainingCredits = 5;
       _subscriptionExpiryDate = null;
 
-      // 스트림 업데이트
-      _subscriptionStatusController.add(_currentStatus);
+      // 외부 상태 업데이트 및 스트림 알림
+      _updateExternalStatusAndNotify();
 
       debugPrint('🔄 구독 상태 리셋 완료');
     } catch (e) {
@@ -249,14 +283,17 @@ class SubscriptionService {
   // 현재 사용 중인 AI 모델 가져오기
   String getCurrentModel() {
     switch (_currentStatus) {
-      case SubscriptionStatus.premium:
-      case SubscriptionStatus.testPremium:
+      case TestSubscriptionStatus.premium:
+      case TestSubscriptionStatus.testPremium:
+        debugPrint('🤖 프리미엄 모델 사용 중: ${SubscriptionConstants.premiumAiModel}');
         return SubscriptionConstants.premiumAiModel;
-      case SubscriptionStatus.basic:
+      case TestSubscriptionStatus.basic:
+        debugPrint('🤖 기본 모델 사용 중: ${SubscriptionConstants.basicAiModel}');
         return SubscriptionConstants.basicAiModel;
-      case SubscriptionStatus.free:
+      case TestSubscriptionStatus.free:
       default:
-        return SubscriptionConstants.basicAiModel;
+        debugPrint('🤖 무료 모델 사용 중: ${SubscriptionConstants.freeAiModel}');
+        return SubscriptionConstants.freeAiModel; // 수정: 무료 계정은 무료 모델 사용
     }
   }
 
@@ -274,7 +311,54 @@ class SubscriptionService {
 
     _remainingCredits += count;
     await _saveRemainingCredits();
+    _updateExternalStatusAndNotify();
     debugPrint('✅ $count 크레딧 추가됨. 현재: $_remainingCredits');
+  }
+
+  // 구독 구매 (subscription_screen.dart와의 호환성을 위한 메서드)
+  Future<void> purchaseSubscription(domain.SubscriptionType type) async {
+    // 테스트 환경에서는 즉시 구독 활성화
+    if (_appConfig.isTestMode) {
+      debugPrint('🧪 테스트 환경에서 ${type.name} 플랜 구독 시뮬레이션');
+
+      switch (type) {
+        case domain.SubscriptionType.basic:
+          await activateTestSubscription(isPremium: false);
+          break;
+        case domain.SubscriptionType.premium:
+          await activateTestSubscription(isPremium: true);
+          break;
+        case domain.SubscriptionType.free:
+        default:
+          await reset();
+          break;
+      }
+      return;
+    }
+
+    // 테스트 환경이 아닌 경우 미구현 오류
+    throw UnimplementedError('실제 구독 구매 기능은 테스트 빌드에서 비활성화되었습니다.');
+  }
+
+  // 구독 복원 (subscription_screen.dart와의 호환성을 위한 메서드)
+  Future<void> restorePurchases() async {
+    if (_appConfig.isTestMode) {
+      debugPrint('🧪 테스트 환경에서 구독 복원 시뮬레이션');
+      // 테스트 환경에서는 임의로 프리미엄 구독을 활성화
+      await activateTestSubscription(isPremium: true);
+      return;
+    }
+
+    // 테스트 환경이 아닌 경우 미구현 오류
+    throw UnimplementedError('실제 구독 복원 기능은 테스트 빌드에서 비활성화되었습니다.');
+  }
+
+  // 리워드 광고로 무료 생성권 추가 (subscription_screen.dart와의 호환성을 위한 메서드)
+  Future<void> addRewardedGeneration() async {
+    _remainingCredits += 1;
+    await _saveRemainingCredits();
+    _updateExternalStatusAndNotify();
+    debugPrint('💰 리워드 광고로 1회 생성권 추가됨. 현재: $_remainingCredits');
   }
 }
 
@@ -304,7 +388,7 @@ extension SubscriptionServiceExtensions on SubscriptionService {
     }
 
     // 프리미엄 사용자에게만 허용
-    return _currentStatus == SubscriptionStatus.premium;
+    return _currentStatus == TestSubscriptionStatus.premium;
   }
 
   /// 사용자가 PDF 내보내기 기능을 사용할 수 있는지 확인
@@ -315,8 +399,9 @@ extension SubscriptionServiceExtensions on SubscriptionService {
     }
 
     // 유료 구독에게만 허용
-    return _currentStatus == SubscriptionStatus.premium ||
-           _currentStatus == SubscriptionStatus.basic;
+    return _currentStatus == TestSubscriptionStatus.premium ||
+           _currentStatus == TestSubscriptionStatus.testPremium ||
+           _currentStatus == TestSubscriptionStatus.basic;
   }
 
   /// 광고가 표시되어야 하는지 확인
@@ -327,7 +412,18 @@ extension SubscriptionServiceExtensions on SubscriptionService {
     }
 
     // 프리미엄 사용자는 광고 없음
-    return _currentStatus == SubscriptionStatus.free;
+    return _currentStatus == TestSubscriptionStatus.free;
+  }
+
+  /// 캐릭터 생성 기능을 사용할 수 있는지 확인
+  bool get canCreateCharacter {
+    // 테스트 모드에서는 항상 true
+    if (_featureFlags.enablePremiumFeatures) {
+      return true;
+    }
+
+    // 무료 사용자는 캐릭터 생성 불가
+    return _currentStatus != TestSubscriptionStatus.free;
   }
 
   /// 단어 갯수 제한 확인
@@ -341,12 +437,12 @@ extension SubscriptionServiceExtensions on SubscriptionService {
 
     // 구독 유형에 따라 다른 제한
     switch (_currentStatus) {
-      case SubscriptionStatus.premium:
-      case SubscriptionStatus.testPremium:
+      case TestSubscriptionStatus.premium:
+      case TestSubscriptionStatus.testPremium:
         return SubscriptionConstants.premiumWordMaxLimit;
-      case SubscriptionStatus.basic:
+      case TestSubscriptionStatus.basic:
         return SubscriptionConstants.basicWordMaxLimit;
-      case SubscriptionStatus.free:
+      case TestSubscriptionStatus.free:
       default:
         return SubscriptionConstants.freeWordMaxLimit;
     }

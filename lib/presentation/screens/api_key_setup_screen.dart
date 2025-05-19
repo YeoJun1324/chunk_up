@@ -44,10 +44,10 @@ class _ApiKeySetupScreenState extends State<ApiKeySetupScreen> {
         action: () async {
           final apiKey = _apiKeyController.text.trim();
           await ApiService.validateApiKey(apiKey);
-          await ApiService.saveApiKey(apiKey);
+          await ApiService.saveApiKeyStatic(apiKey);
 
           // 코어 서비스에도 동일한 키 저장
-          await core_api.ApiService.saveApiKey(apiKey);
+          await core_api.ApiService.saveApiKeyStatic(apiKey);
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

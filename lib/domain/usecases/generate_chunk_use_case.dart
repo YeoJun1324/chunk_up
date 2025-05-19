@@ -17,6 +17,7 @@ class GenerateChunkParams {
   final String? character;
   final String? scenario;
   final String? details;
+  final String? modelOverride;
 
   GenerateChunkParams({
     required this.selectedWords,
@@ -24,6 +25,7 @@ class GenerateChunkParams {
     this.character,
     this.scenario,
     this.details,
+    this.modelOverride,
   });
 }
 
@@ -40,7 +42,7 @@ class GenerateChunkUseCase {
   }) : characterService = CharacterService(); // 싱글톤 패턴 사용
 
   /// Execute with wordListId (legacy method)
-  Future<List<Chunk>> execute(String wordListId) async {
+  Future<List<Chunk>> execute(String wordListId, {String? modelOverride}) async {
     // Check if word list exists
     final wordList = await wordListRepository.getWordListById(wordListId);
     if (wordList == null) {
@@ -50,7 +52,7 @@ class GenerateChunkUseCase {
       );
     }
 
-    return await chunkRepository.generateChunks(wordListId);
+    return await chunkRepository.generateChunks(wordListId, modelOverride: modelOverride);
   }
 
   /// Call method for GenerateChunkParams
@@ -153,7 +155,10 @@ IMPORTANT:
 """;
 
     try {
-      final apiResponse = await apiService.generateChunk(prompt);
+      final apiResponse = await apiService.generateChunk(
+        prompt,
+        modelOverride: params.modelOverride
+      );
       debugPrint('API Response received: ${apiResponse.toString().substring(0, min(100, apiResponse.toString().length))}...');
 
       // 데이터 형식 분석

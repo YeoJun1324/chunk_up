@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:chunk_up/core/services/api_service.dart';
 import 'package:chunk_up/core/services/character_service.dart';
 import 'package:chunk_up/core/services/error_service.dart';
@@ -157,7 +158,9 @@ class MockWordListRepository implements WordListRepositoryInterface {
 /// 모의 청크 리포지토리
 class MockChunkRepository implements ChunkRepositoryInterface {
   @override
-  Future<List<Chunk>> generateChunks(String wordListId) async {
+  Future<List<Chunk>> generateChunks(String wordListId, {String? modelOverride}) async {
+    // 모의 응답 반환 - modelOverride 파라미터 사용 예시
+    debugPrint('Mock generating chunks for $wordListId${modelOverride != null ? " with model $modelOverride" : ""}');
     return [];
   }
 

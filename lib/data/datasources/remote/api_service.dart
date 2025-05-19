@@ -7,6 +7,8 @@ import '../../../../core/utils/api_exception.dart';
 import '../../../../core/services/network_service.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/constants/error_messages.dart';
+import 'package:chunk_up/core/services/embedded_api_service.dart';
+import 'package:chunk_up/core/services/api_service.dart' as core_api;
 
 /// API 서비스 클래스
 /// Claude API와의 통신을 담당하며, API 키 관리, 검증, 청크 생성 등의 기능 제공
@@ -22,6 +24,11 @@ class ApiService {
   /// API 키 저장하기
   static Future<void> saveApiKey(String apiKey) async {
     await _secureStorage.write(key: ApiConstants.secureStorageApiKeyKey, value: apiKey);
+  }
+
+  /// API 키 저장하기 (정적 메서드 - 이름 표준화를 위한 별칭)
+  static Future<void> saveApiKeyStatic(String apiKey) async {
+    await saveApiKey(apiKey);
   }
 
   /// API URL 가져오기
@@ -54,8 +61,35 @@ class ApiService {
 
   /// 청크 생성 메서드
   static Future<Map<String, dynamic>> generateChunk(String prompt) async {
-    final String? key = await apiKey;
-    
+    // API 키 가져오기 시도
+    var key = await apiKey;
+
+    // API 키가 없으면 내장 API 키 가져오기 시도
+    if (key == null || key.isEmpty) {
+      debugPrint('⚠️ API 키가 없습니다. 내장 API 키 가져오기 시도...');
+
+      // EmbeddedApiService에서 키 가져오기 시도
+      try {
+        // 내장 API 키 초기화 및 가져오기 시도
+        await EmbeddedApiService.initializeApiSettings();
+        key = await EmbeddedApiService.getApiKey();
+
+        // 키를 가져왔으면 저장
+        if (key != null && key.isNotEmpty) {
+          debugPrint('✅ 내장 API 키 가져오기 성공');
+          // 보안 저장소에 저장
+          await saveApiKey(key);
+          // 코어 API 서비스에도 저장
+          await core_api.ApiService.saveApiKeyStatic(key);
+        } else {
+          debugPrint('⚠️ 내장 API 키를 가져올 수 없음');
+        }
+      } catch (e) {
+        debugPrint('❌ 내장 API 키 가져오기 실패: $e');
+      }
+    }
+
+    // 최종 확인
     if (key == null || key.isEmpty) {
       throw ApiException(ErrorMessages.apiKeyNotSet);
     }
@@ -88,8 +122,32 @@ class ApiService {
 
   /// 단어 설명 생성 메서드
   static Future<String> generateWordExplanation(String word, String paragraph) async {
-    final String? key = await apiKey;
-    
+    // API 키 가져오기 시도
+    var key = await apiKey;
+
+    // API 키가 없으면 내장 API 키 가져오기 시도
+    if (key == null || key.isEmpty) {
+      debugPrint('⚠️ API 키가 없습니다. 내장 API 키 가져오기 시도...');
+
+      // EmbeddedApiService에서 키 가져오기 시도
+      try {
+        await EmbeddedApiService.initializeApiSettings();
+        key = await EmbeddedApiService.getApiKey();
+
+        // 키를 가져왔으면 저장
+        if (key != null && key.isNotEmpty) {
+          debugPrint('✅ 내장 API 키 가져오기 성공');
+          await saveApiKey(key);
+          await core_api.ApiService.saveApiKeyStatic(key);
+        } else {
+          debugPrint('⚠️ 내장 API 키를 가져올 수 없음');
+        }
+      } catch (e) {
+        debugPrint('❌ 내장 API 키 가져오기 실패: $e');
+      }
+    }
+
+    // 최종 확인
     if (key == null || key.isEmpty) {
       throw ApiException(ErrorMessages.apiKeyNotSet);
     }

@@ -79,8 +79,12 @@ Future<void> setupServiceLocator({Environment environment = Environment.developm
   getIt.registerLazySingleton<NetworkService>(() => NetworkService()..initialize());
 
   // 구독 및 광고 서비스
-  getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
-  getIt.registerLazySingleton<AdHelper>(() => AdHelper());
+  if (!getIt.isRegistered<SubscriptionService>()) {
+    getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
+  }
+  if (!getIt.isRegistered<AdHelper>()) {
+    getIt.registerLazySingleton<AdHelper>(() => AdHelper());
+  }
 
   // API 서비스
   getIt.registerLazySingleton<ApiService>(() => ApiService(

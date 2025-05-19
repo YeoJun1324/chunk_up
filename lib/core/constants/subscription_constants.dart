@@ -14,6 +14,8 @@ class SubscriptionConstants {
   static const String iosBannerAdUnitId = 'ca-app-pub-3940256099942544/2934735716'; // 테스트 ID
   static const String androidRewardedAdUnitId = 'ca-app-pub-3940256099942544/5224354917'; // 테스트 ID
   static const String iosRewardedAdUnitId = 'ca-app-pub-3940256099942544/1712485313'; // 테스트 ID
+  static const String androidInterstitialAdUnitId = 'ca-app-pub-3940256099942544/1033173712'; // 테스트 ID
+  static const String iosInterstitialAdUnitId = 'ca-app-pub-3940256099942544/4411468910'; // 테스트 ID
   
   // AI 모델 ID
   static const String freeAiModel = 'claude-3-haiku-20240307'; // 무료 버전용 모델

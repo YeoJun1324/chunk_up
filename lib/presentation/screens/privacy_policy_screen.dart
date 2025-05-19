@@ -122,7 +122,7 @@ class PrivacyPolicyContent extends StatelessWidget {
 2) 개인정보 정정 및 삭제 요구
 3) 개인정보 처리정지 요구
 
-위 권리 행사는 앱 내 설정 메뉴 또는 개발자 이메일(support@chunkup.com)로 연락하여 요청할 수 있습니다. 요청이 있는 경우 지체 없이 필요한 조치를 취하겠습니다.''',
+위 권리 행사는 앱 내 설정 메뉴 또는 개발자 이메일(chunk_up@naver.com)로 연락하여 요청할 수 있습니다. 요청이 있는 경우 지체 없이 필요한 조치를 취하겠습니다.''',
         ),
         _buildSection(
           '8. 개인정보 자동 수집 장치의 설치/운영 및 거부에 관한 사항',
@@ -141,7 +141,7 @@ class PrivacyPolicyContent extends StatelessWidget {
           '''1) 개인정보 보호 책임자
    - 성명: [책임자명]
    - 직위: 개인정보 보호 책임자
-   - 연락처: privacy@chunkup.com
+   - 연락처: chunk_up@naver.com
 
 2) 개인정보 안전성 확보 조치
    - 앱은 개인정보의 안전성 확보를 위해 기술적, 관리적 조치를 취하고 있습니다.

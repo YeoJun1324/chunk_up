@@ -33,6 +33,8 @@ import 'core/services/embedded_api_service.dart'; // 내장 API 키 서비스 �
 import 'di/dependency_injection.dart'; // 다른 파일에서 참조하는 이름을 유지
 import 'core/constants/route_names.dart';
 import 'core/theme/app_theme.dart'; // 앱 테마 정의 추가
+import 'data/services/storage/local_storage_service.dart'; // 로컬 스토리지 서비스 추가
+import 'data/datasources/remote/api_service.dart' as remote_api; // 원격 API 서비스 추가
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,8 +81,9 @@ void main() async {
 
   // 글로벌 에러 처리 Zone
   runZonedGuarded(() async {
-    // 내장 API 키를 사용하므로 항상 API 키가 존재함
-    final bool hasApiKey = true;
+    // API 키가 실제로 존재하는지 확인
+    final apiKey = await ApiService.getApiKey();
+    final bool hasApiKey = apiKey != null && apiKey.isNotEmpty;
 
     runApp(
       // RiverpodContainer로 감싸서 Riverpod Provider 사용 가능하게 함
@@ -141,14 +144,57 @@ Future<void> _testApiService(ApiService apiService) async {
   try {
     debugPrint('🧪 API 서비스 테스트 시작');
 
-    // API 키 확인
-    final apiKey = await ApiService.getApiKey();
-    debugPrint('🔑 API 키: ${apiKey != null && apiKey.isNotEmpty ? "설정됨" : "설정되지 않음"}');
+    // 임베디드 API 키 다시 초기화 시도
+    debugPrint('🔄 API 키 초기화 재시도');
+    await EmbeddedApiService.initializeApiSettings();
 
-    if (apiKey != null && apiKey.isNotEmpty) {
+    // LocalStorageService에서 직접 API 키 확인
+    final localStorageService = LocalStorageService();
+    final localApiKey = await localStorageService.getString('api_key');
+    debugPrint('🔍 로컬 저장소 API 키 확인: ${localApiKey != null && localApiKey.isNotEmpty ? "있음" : "없음"}');
+
+    // 보안 저장소에서 API 키 확인
+    final secureApiKey = await remote_api.ApiService.apiKey;
+    debugPrint('🔍 보안 저장소 API 키 확인: ${secureApiKey != null && secureApiKey.isNotEmpty ? "있음" : "없음"}');
+
+    // API 키 확인 (ApiService 사용)
+    final apiKey = await ApiService.getApiKey();
+    debugPrint('🔍 API 키 확인: ${apiKey != null && apiKey.isNotEmpty ? "있음" : "없음"}');
+
+    if (apiKey == null || apiKey.isEmpty) {
+      debugPrint('❌ API 키가 설정되지 않았습니다');
+      // API 키가 없으면 임베디드 키 직접 가져와서 설정
+      try {
+        // 내장 API 키 서비스 초기화를 다시 시도하고 키를 가져오기
+        await EmbeddedApiService.initializeApiSettings();
+        final embeddedKey = await EmbeddedApiService.getApiKey();
+
+        if (embeddedKey != null && embeddedKey.isNotEmpty) {
+          debugPrint('🔑 임베디드 키 직접 사용: ${embeddedKey.substring(0, 15)}...');
+
+          // API 키 직접 저장
+          await ApiService.saveApiKeyStatic(embeddedKey);
+          await remote_api.ApiService.saveApiKeyStatic(embeddedKey);
+        } else {
+          debugPrint('⚠️ 임베디드 키를 가져올 수 없음');
+        }
+      } catch (e) {
+        debugPrint('⚠️ 임베디드 키 초기화 중 오류: $e');
+      }
+
+      // 저장 확인
+      final savedApiKey = await ApiService.getApiKey();
+      debugPrint('🔄 API 키 저장 후 확인: ${savedApiKey != null && savedApiKey.isNotEmpty ? "성공" : "실패"}');
+    }
+
+    // 이제 API 키가 설정되었으니 테스트 진행
+    final testApiKey = await ApiService.getApiKey();
+    if (testApiKey != null && testApiKey.isNotEmpty) {
       // 간단한 API 테스트
       final isConnected = await apiService.testApiConnection();
       debugPrint('🌐 API 연결 테스트: ${isConnected ? "성공" : "실패"}');
+    } else {
+      debugPrint('⚠️ API 키 설정 실패, 연결 테스트 생략');
     }
   } catch (e) {
     debugPrint('❌ API 테스트 중 오류 발생: $e');

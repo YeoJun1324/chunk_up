@@ -9,6 +9,8 @@ import 'chunk_result_screen.dart';
 import 'package:chunk_up/core/services/api_service.dart';
 import 'package:chunk_up/core/services/error_service.dart';
 import 'package:chunk_up/core/services/character_service.dart';
+import 'package:chunk_up/core/services/subscription_service.dart';
+import 'package:chunk_up/core/services/ad_service.dart';
 import 'character_creation_screen.dart';
 import 'package:chunk_up/core/utils/business_exception.dart';
 import 'package:chunk_up/domain/usecases/generate_chunk_use_case.dart';
@@ -34,6 +36,9 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
   final TextEditingController _scenarioController = TextEditingController();
   final TextEditingController _detailsController = TextEditingController();
   late final GenerateChunkUseCase _generateChunkUseCase;
+  late SubscriptionService _subscriptionService;
+  late AdService _adService;
+  bool _isCheckingSubscription = true;
 
   List<String> _characterOptions = [];
 
@@ -43,6 +48,45 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
     _loadCharacterOptions();
     // getIt을 사용하여 의존성 주입
     _generateChunkUseCase = getIt<GenerateChunkUseCase>();
+    _initializeServices();
+  }
+
+  Future<void> _initializeServices() async {
+    try {
+      // 구독 서비스 초기화
+      if (!getIt.isRegistered<SubscriptionService>()) {
+        getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
+      }
+      _subscriptionService = getIt<SubscriptionService>();
+
+      // 광고 서비스 초기화 - 이미 등록된 인스턴스 확인
+      if (!getIt.isRegistered<AdService>()) {
+        getIt.registerLazySingleton<AdService>(() => AdService());
+      }
+
+      // 광고 서비스 인스턴스 가져오기
+      _adService = getIt<AdService>();
+
+      // 광고 서비스가 초기화되지 않았다면 초기화
+      if (!_adService.isInitialized) {
+        await _adService.initialize();
+      }
+
+      // 전면 광고가 로드되지 않았다면 로드
+      if (!_adService.isInterstitialAdLoaded) {
+        await _adService.loadInterstitialAd();
+      }
+
+      debugPrint('✅ 청크 생성 화면: 서비스 초기화 완료');
+    } catch (e) {
+      debugPrint('❌ 청크 생성 화면: 서비스 초기화 실패: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingSubscription = false;
+        });
+      }
+    }
   }
 
   @override
@@ -185,6 +229,43 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
             message: ErrorMessages.wordCountOutOfRange,
             type: BusinessErrorType.invalidWordCount,
           );
+        }
+
+        // 청크 생성 시작 전에 무료 사용자인 경우 광고 표시
+        final shouldShowAd = _subscriptionService.shouldShowAds;
+        if (shouldShowAd) {
+          debugPrint('💰 무료 사용자 청크 생성 - 광고 표시');
+
+          // 광고 로드 및 표시
+          bool adShown = false;
+
+          // 로딩 표시 (광고 준비 중)
+          setState(() {
+            _isLoading = true;
+          });
+
+          // 광고 표시 시도
+          try {
+            if (_adService.isInterstitialAdLoaded) {
+              adShown = await _adService.showInterstitialAd();
+            } else {
+              // 광고가 로드되지 않은 경우 로드 시도
+              await _adService.loadInterstitialAd();
+              if (_adService.isInterstitialAdLoaded) {
+                adShown = await _adService.showInterstitialAd();
+              }
+            }
+
+            if (adShown) {
+              debugPrint('✅ 청크 생성 전 광고 표시 성공');
+            } else {
+              debugPrint('⚠️ 광고 표시 실패 또는 로드 실패, 청크 생성 계속 진행');
+            }
+          } catch (e) {
+            debugPrint('❌ 광고 표시 중 오류: $e');
+          }
+        } else {
+          debugPrint('💎 구독 사용자 청크 생성 - 광고 없음');
         }
 
         // API 서비스 테스트 (디버깅용)

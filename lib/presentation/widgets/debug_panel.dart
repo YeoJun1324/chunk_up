@@ -1,4 +1,5 @@
 // lib/presentation/widgets/debug_panel.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:chunk_up/core/config/app_config.dart';
 import 'package:chunk_up/core/config/feature_flags.dart';
@@ -25,7 +26,30 @@ class _DebugPanelState extends State<DebugPanel> {
   @override
   void initState() {
     super.initState();
-    _subscriptionService = getIt<SubscriptionService>();
+
+    // DI에서 SubscriptionService 인스턴스 가져오기
+    try {
+      // 서비스가 등록되어 있는지 확인
+      if (!getIt.isRegistered<SubscriptionService>()) {
+        debugPrint('⚠️ SubscriptionService가 등록되어 있지 않음, 등록 시도...');
+        getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
+      }
+
+      _subscriptionService = getIt<SubscriptionService>();
+      debugPrint('✅ 디버그 패널: 구독 서비스 초기화 성공');
+
+      // 구독 상태 변경 모니터링
+      _subscriptionStreamSubscription = _subscriptionService.subscriptionStatusStream.listen((_) {
+        // 상태가 변경되면 UI 갱신
+        if (mounted) {
+          setState(() {
+            debugPrint('🔄 디버그 패널: 구독 상태 변경 감지됨');
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint('❌ 디버그 패널: 구독 서비스 초기화 실패: $e');
+    }
   }
 
   @override
@@ -100,6 +124,7 @@ class _DebugPanelState extends State<DebugPanel> {
                     _buildInfoRow('현재 상태', _subscriptionService.status.toString()),
                     _buildInfoRow('프리미엄', _subscriptionService.isPremium.toString()),
                     _buildInfoRow('남은 크레딧', _subscriptionService.remainingCredits.toString()),
+                    _buildInfoRow('사용 중인 AI 모델', _subscriptionService.getCurrentModel()),
                     
                     const SizedBox(height: 16),
                     _buildSectionTitle('테스트 기능'),
@@ -265,5 +290,15 @@ class _DebugPanelState extends State<DebugPanel> {
       debugPrint('API 키 가져오기 오류: $e');
       return null;
     }
+  }
+
+  // 구독 스트림 구독 관리용 변수
+  StreamSubscription? _subscriptionStreamSubscription;
+
+  @override
+  void dispose() {
+    // 구독 취소
+    _subscriptionStreamSubscription?.cancel();
+    super.dispose();
   }
 }

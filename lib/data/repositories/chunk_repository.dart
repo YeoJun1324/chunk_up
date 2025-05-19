@@ -32,7 +32,7 @@ class ChunkRepositoryImpl extends BaseRepository<Chunk> implements ChunkReposito
   }
 
   @override
-  Future<List<Chunk>> generateChunks(String wordListId) async {
+  Future<List<Chunk>> generateChunks(String wordListId, {String? modelOverride}) async {
     final wordList = await _wordListRepository.getWordListById(wordListId);
     if (wordList == null) {
       throw BusinessException(
@@ -45,7 +45,10 @@ class ChunkRepositoryImpl extends BaseRepository<Chunk> implements ChunkReposito
     final existingChunks = await getChunksForWordList(wordListId);
 
     // Generate chunks based on the words using the API service
-    final responses = await _apiService.generateChunksForWords(wordList.words);
+    final responses = await _apiService.generateChunksForWords(
+      wordList.words,
+      modelOverride: modelOverride,
+    );
 
     // Create new chunks from the responses
     final newChunks = responses.asMap().entries.map((entry) {

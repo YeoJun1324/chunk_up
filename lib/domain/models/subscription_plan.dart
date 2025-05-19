@@ -21,8 +21,9 @@ class SubscriptionPlan {
   final bool hasAds;
   final bool allowsTest;
   final bool allowsPdfExport;
+  final bool allowsCharacterCreation;
   final String productId;
-  
+
   const SubscriptionPlan({
     required this.type,
     required this.name,
@@ -35,6 +36,7 @@ class SubscriptionPlan {
     required this.hasAds,
     required this.allowsTest,
     required this.allowsPdfExport,
+    required this.allowsCharacterCreation,
     required this.productId,
   });
   
@@ -51,6 +53,7 @@ class SubscriptionPlan {
     hasAds: true,
     allowsTest: false,
     allowsPdfExport: false,
+    allowsCharacterCreation: false,
     productId: SubscriptionConstants.freePlanId,
   );
   
@@ -67,6 +70,7 @@ class SubscriptionPlan {
     hasAds: false,
     allowsTest: true,
     allowsPdfExport: true,
+    allowsCharacterCreation: true,
     productId: SubscriptionConstants.basicMonthlyProductId,
   );
   
@@ -83,6 +87,7 @@ class SubscriptionPlan {
     hasAds: false,
     allowsTest: true,
     allowsPdfExport: true,
+    allowsCharacterCreation: true,
     productId: SubscriptionConstants.premiumMonthlyProductId,
   );
   

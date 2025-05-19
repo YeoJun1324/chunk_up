@@ -8,6 +8,8 @@ import 'package:chunk_up/data/datasources/remote/api_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chunk_up/core/theme/app_theme.dart'; // 앱 테마 정의 추가
+import 'package:chunk_up/core/services/subscription_service.dart'; // 구독 서비스 추가
+import 'package:chunk_up/di/service_locator.dart'; // 서비스 로케이터 추가
 import 'import_screen.dart';
 import 'help_screen.dart';
 import 'legal_info_screen.dart';
@@ -31,19 +33,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Subscriptions
   bool _isPremium = false;
-  int _remainingFreeCredits = 5;
+  int _remainingFreeCredits = 0;
+  late final SubscriptionService _subscriptionService;
 
   // App info
   String _appVersion = '';
-  final String _developerEmail = 'duwns051004@gmail.com';
+  final String _developerEmail = 'chunk_up@naver.com';
 
   // 기타 설정 필드
 
   @override
   void initState() {
     super.initState();
+    _subscriptionService = SubscriptionService();
     _loadSettings();
     _loadAppInfo();
+    _loadSubscriptionInfo();
+  }
+
+  void _loadSubscriptionInfo() {
+    setState(() {
+      _isPremium = _subscriptionService.isPremium;
+      _remainingFreeCredits = _subscriptionService.remainingCredits;
+    });
+
+    // 구독 상태 변경 시 화면 갱신
+    _subscriptionService.subscriptionStatusStream.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPremium = _subscriptionService.isPremium;
+          _remainingFreeCredits = _subscriptionService.remainingCredits;
+        });
+      }
+    });
   }
 
   Future<void> _loadSettings() async {
@@ -58,9 +80,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _interfaceLanguage = prefs.getString('interfaceLanguage') ?? 'ko';
       _showTranslation = prefs.getBool('showTranslation') ?? true;
       _highlightWords = prefs.getBool('highlightWords') ?? true;
-      _isPremium = prefs.getBool('isPremium') ?? false;
-      _remainingFreeCredits = prefs.getInt('remainingFreeCredits') ?? 5;
       _maxReviewStage = prefs.getInt('maxReviewStage') ?? 4; // 최대 복습 단계 로드
+      // 구독 정보는 구독 서비스에서 불러옴
     });
   }
 

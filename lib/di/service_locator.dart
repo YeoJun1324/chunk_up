@@ -73,9 +73,7 @@ Future<void> setupServiceLocator({Environment environment = Environment.producti
 
   // 명시적으로 SubscriptionService 등록 (대소문자 일치 확인)
   if (!getIt.isRegistered<SubscriptionService>()) {
-    getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService(
-      storageService: getIt<StorageService>(),
-    ));
+    getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
   }
 
   // 명시적으로 AdService 등록 (대소문자 일치 확인)

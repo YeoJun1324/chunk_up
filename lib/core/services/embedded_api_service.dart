@@ -4,6 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/api_constants.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import 'package:chunk_up/data/services/storage/local_storage_service.dart';
+import 'package:chunk_up/core/services/api_service.dart' as core_api;
 
 /// 내장된 API 키를 관리하는 서비스
 /// 
@@ -43,8 +45,8 @@ class EmbeddedApiService {
       final bytes = base64.decode(_embeddedKey);
       
       // 여기서는 간단한 데모용 디코딩만 수행
-      // 아래에서 .env 파일에 있는 키를 가져오는 것으로 대체
-      return "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";
+      // 실제 배포 버전에서는 안전한 방식으로 API 키를 관리해야 함
+      return "YOUR_API_KEY_HERE"; // 실제 API 키는 GitHub에 업로드하지 않음
     } catch (e) {
       debugPrint('키 복호화 오류: $e');
       throw Exception('내장 API 키 복호화 실패');
@@ -75,15 +77,54 @@ class EmbeddedApiService {
     if (useEmbeddedKey) {
       try {
         final embeddedKey = _decryptEmbeddedKey();
+        debugPrint('💡 임베디드 API 키: ${embeddedKey.substring(0, 15)}...');
+
         // 보안 저장소에도 저장하여 다른 서비스에서 사용할 수 있게 함
         await _secureStorage.write(
-          key: ApiConstants.secureStorageApiKeyKey, 
+          key: ApiConstants.secureStorageApiKeyKey,
           value: embeddedKey
         );
+
+        // API 키가 성공적으로 저장되었는지 확인
+        final savedKey = await _secureStorage.read(
+          key: ApiConstants.secureStorageApiKeyKey
+        );
+
+        if (savedKey != null && savedKey.isNotEmpty) {
+          debugPrint('✅ API 키가 보안 저장소에 성공적으로 저장됨');
+        } else {
+          debugPrint('⚠️ API 키가 보안 저장소에 저장되지 않음');
+        }
+
+        // LocalStorageService에도 저장
+        try {
+          // core/services/api_service.dart에서 사용하는 키로도 저장
+          await saveToLocalStorage(embeddedKey);
+          await core_api.ApiService.saveApiKeyStatic(embeddedKey);
+          debugPrint('✅ API 키가 로컬 저장소에도 저장됨');
+        } catch (storageError) {
+          debugPrint('⚠️ 로컬 저장소 저장 실패: $storageError');
+        }
+
         debugPrint('✅ API 키 초기화 완료');
       } catch (e) {
         debugPrint('❌ API 키 초기화 실패: $e');
       }
+    }
+  }
+
+  /// 로컬 저장소에도 API 키 저장 (ApiService와 동기화)
+  static Future<void> saveToLocalStorage(String apiKey) async {
+    // ApiService에서 사용하는 상수와 동일한 키로 저장
+    const String apiKeyStorageKey = 'api_key';
+
+    // local_storage_service.dart 직접 사용
+    try {
+      final service = LocalStorageService();
+      await service.setString(apiKeyStorageKey, apiKey);
+    } catch (e) {
+      debugPrint('❌ 로컬 저장소에 API 키 저장 실패: $e');
+      rethrow;
     }
   }
 }

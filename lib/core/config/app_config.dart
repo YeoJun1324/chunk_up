@@ -28,7 +28,7 @@ class AppConfig {
   // 내부 생성자 - 테스트 환경 기본값 설정
   AppConfig._internal()
       : environment = Environment.development,   // 개발 환경
-        enableAds = false,                       // 광고 비활성화
+        enableAds = true,                        // 광고 활성화
         enableSubscriptions = true,              // 구독 기능 활성화
         useTestInAppPurchase = true,             // 테스트 결제 사용
         freeCreditsForTesters = 100,             // 테스터용 크레딧

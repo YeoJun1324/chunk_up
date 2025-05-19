@@ -4,7 +4,8 @@ import 'package:chunk_up/domain/models/chunk.dart';
 /// Interface for the chunk repository
 abstract class ChunkRepositoryInterface {
   /// Generate chunks for a word list
-  Future<List<Chunk>> generateChunks(String wordListId);
+  /// [modelOverride] Optional parameter to specify which AI model to use
+  Future<List<Chunk>> generateChunks(String wordListId, {String? modelOverride});
 
   /// Generate a single chunk with a prompt
   Future<Map<String, dynamic>> generateChunk(String prompt);

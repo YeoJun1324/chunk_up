@@ -6,11 +6,14 @@ import 'package:chunk_up/core/utils/api_exception.dart';
 import 'package:chunk_up/core/utils/business_exception.dart';
 import 'package:chunk_up/domain/models/word.dart';
 import 'package:flutter/material.dart';
-import 'package:chunk_up/data/datasources/remote/api_service.dart' as remote;
+import 'package:chunk_up/data/datasources/remote/api_service.dart' as remote_api;
 import 'package:chunk_up/core/services/cache_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:chunk_up/core/constants/subscription_constants.dart';
 import 'package:chunk_up/core/services/embedded_api_service.dart';
+import 'dart:math';
+import 'package:chunk_up/core/services/subscription_service.dart';
+import 'package:get_it/get_it.dart';
 
 class ApiService {
   static const String _apiKeyStorageKey = 'api_key';
@@ -19,6 +22,7 @@ class ApiService {
   final StorageService _storageService;
   final http.Client _httpClient;
   final CacheService _cacheService;
+  SubscriptionService? _subscriptionService;
 
   // 캐시 관련 설정
   static const bool enableApiCaching = true;
@@ -30,7 +34,7 @@ class ApiService {
 
   // Factory constructor with dependency injection
   factory ApiService({
-    StorageService? storageService, 
+    StorageService? storageService,
     http.Client? httpClient,
     CacheService? cacheService,
   }) {
@@ -41,7 +45,19 @@ class ApiService {
     );
   }
 
-  ApiService._internal(this._storageService, this._httpClient, this._cacheService);
+  ApiService._internal(this._storageService, this._httpClient, this._cacheService) {
+    // SubscriptionService 인스턴스 초기화 시도
+    try {
+      if (!GetIt.I.isRegistered<SubscriptionService>()) {
+        debugPrint('⚠️ API 서비스 생성자에서 SubscriptionService가 등록되지 않음, 등록 시도...');
+        GetIt.I.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
+      }
+      _subscriptionService = GetIt.I<SubscriptionService>();
+      debugPrint('✅ API 서비스에서 SubscriptionService 초기화 성공');
+    } catch (e) {
+      debugPrint('❌ API 서비스에서 SubscriptionService 초기화 실패: $e');
+    }
+  }
 
   /// Get the API key from storage (non-static for instance method)
   Future<String?> get apiKey async {
@@ -67,10 +83,33 @@ class ApiService {
     }
   }
 
-  /// Save the API key to storage
-  static Future<void> saveApiKey(String key) async {
+  /// Save the API key to storage - static version
+  static Future<void> saveApiKeyStatic(String key) async {
+    debugPrint('🔑 API 키 저장 중... (정적 메서드)');
+    // 로컬 스토리지에 저장
     final service = LocalStorageService();
     await service.setString(_apiKeyStorageKey, key);
+
+    // 보안 저장소에도 저장 (data/datasources/remote/api_service.dart에서 사용)
+    try {
+      await remote_api.ApiService.saveApiKeyStatic(key);
+      debugPrint('✅ API 키가 로컬 및 보안 저장소에 저장됨');
+    } catch (e) {
+      debugPrint('⚠️ 보안 저장소 저장 실패: $e');
+    }
+  }
+
+  /// 인스턴스에서 API 키 저장 (인스턴스 메서드)
+  Future<void> saveApiKey(String key) async {
+    debugPrint('🔑 API 키 저장 중... (인스턴스 메서드)');
+    await _storageService.setString(_apiKeyStorageKey, key);
+
+    // 보안 저장소에도 저장
+    try {
+      await remote_api.ApiService.saveApiKeyStatic(key);
+    } catch (e) {
+      debugPrint('⚠️ 보안 저장소 저장 실패: $e');
+    }
   }
 
   /// Clear the API key from storage
@@ -267,8 +306,41 @@ class ApiService {
       final apiKey = await this.apiKey;
       debugPrint('🔑 API 키 확인: ${apiKey != null ? "유효함" : "없음"}');
 
-      // 모델 선택 (기본값은 고급 모델, 구독 서비스에서 변경 가능)
-      final model = modelOverride ?? 'claude-3-7-sonnet-20250219';
+      // 모델 선택 (구독 상태에 따라 모델 결정)
+      String model;
+      if (modelOverride != null) {
+        // 명시적으로 지정된 모델이 있으면 사용
+        model = modelOverride;
+        debugPrint('🤖 명시적으로 지정된 모델 사용: $model');
+      } else {
+        // 없으면 현재 구독 상태에 따라 모델 결정
+        try {
+          // 1. 먼저 내부 인스턴스 사용 시도
+          if (_subscriptionService != null) {
+            model = _subscriptionService!.getCurrentModel();
+            debugPrint('🤖 내부 구독 서비스로부터 모델 가져옴: $model');
+          }
+          // 2. 내부 인스턴스가 없으면 GetIt 사용 시도
+          else {
+            // 서비스 등록 여부 확인 및 필요시 등록
+            if (!GetIt.I.isRegistered<SubscriptionService>()) {
+              debugPrint('⚠️ SubscriptionService가 등록되지 않음, 등록 시도...');
+              GetIt.I.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
+            }
+
+            final subscriptionService = GetIt.I<SubscriptionService>();
+            model = subscriptionService.getCurrentModel();
+
+            // 향후 사용을 위해 내부 인스턴스에 저장
+            _subscriptionService = subscriptionService;
+
+            debugPrint('🤖 GetIt에서 구독 서비스로부터 모델 가져옴: $model');
+          }
+        } catch (e) {
+          debugPrint('⚠️ 구독 서비스 접근 실패, 기본 모델 사용: $e');
+          model = SubscriptionConstants.freeAiModel; // 오류 시 무료 모델로 폴백
+        }
+      }
       debugPrint('🤖 사용 모델: $model');
 
       // 디버그를 위해 전체 프롬프트 출력 (개발 모드에서만 표시)
@@ -368,7 +440,28 @@ class ApiService {
     try {
       debugPrint('🧪 API 연결 테스트 시작');
 
-      final key = await this.apiKey;
+      // 인스턴스의 apiKey 메서드로 키 가져오기
+      var key = await this.apiKey;
+
+      // 키가 없으면 EmbeddedApiService에서 직접 가져오기 시도
+      if (key == null || key.isEmpty) {
+        debugPrint('⚠️ 인스턴스 API 키 없음, 내장 키 시도 중...');
+        try {
+          // 내장 API 키 초기화 및 가져오기 시도
+          await EmbeddedApiService.initializeApiSettings();
+          key = await EmbeddedApiService.getApiKey();
+
+          // 키를 성공적으로 가져왔으면 저장
+          if (key != null && key.isNotEmpty) {
+            debugPrint('✅ 내장 API 키 가져오기 성공');
+            await saveApiKeyStatic(key); // 현재 인스턴스에 저장
+          }
+        } catch (e) {
+          debugPrint('❌ 내장 API 키 가져오기 실패: $e');
+        }
+      }
+
+      // 최종 확인
       if (key == null || key.isEmpty) {
         debugPrint('❌ API 키가 없어 테스트 불가');
         return false;
@@ -454,15 +547,51 @@ class ApiService {
   Future<Map<String, dynamic>> compareModels(String prompt) async {
     debugPrint('🔬 모델 성능 비교 테스트 시작');
 
+    // SubscriptionService 이용하여 설정된 모델 가져오기 시도
+    String? basicModel;
+    String? premiumModel;
+
+    try {
+      // 모델 ID 확인
+      if (_subscriptionService != null) {
+        // 현재 상태 백업
+        final originalStatus = _subscriptionService!.status;
+
+        // 기본 구독 상태로 변경
+        await _subscriptionService!.activateTestSubscription(isPremium: false);
+        basicModel = _subscriptionService!.getCurrentModel();
+
+        // 프리미엄 구독 상태로 변경
+        await _subscriptionService!.activateTestSubscription(isPremium: true);
+        premiumModel = _subscriptionService!.getCurrentModel();
+
+        // 원래 상태로 복원
+        if (originalStatus == TestSubscriptionStatus.premium ||
+            originalStatus == TestSubscriptionStatus.testPremium) {
+          await _subscriptionService!.activateTestSubscription(isPremium: true);
+        } else if (originalStatus == TestSubscriptionStatus.basic) {
+          await _subscriptionService!.activateTestSubscription(isPremium: false);
+        } else {
+          await _subscriptionService!.reset();
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ 구독 서비스에서 모델 정보 가져오기 실패: $e');
+    }
+
+    // 가져온 모델이 없으면 기본값 사용
+    basicModel ??= SubscriptionConstants.basicAiModel;
+    premiumModel ??= SubscriptionConstants.premiumAiModel;
+
     // 시간 측정용 Stopwatch
     final basicStopwatch = Stopwatch()..start();
     final premiumStopwatch = Stopwatch()..start();
 
-    // 1. Basic 모델 테스트 (Claude 3.5 Haiku)
-    debugPrint('🧪 기본 모델 (Claude 3.5 Haiku) 테스트 시작');
+    // 1. Basic 모델 테스트
+    debugPrint('🧪 기본 모델 ($basicModel) 테스트 시작');
     final basicResult = await generateChunk(
       prompt,
-      modelOverride: SubscriptionConstants.basicAiModel,
+      modelOverride: basicModel,
       trackPerformance: true
     );
     basicStopwatch.stop();
@@ -470,11 +599,11 @@ class ApiService {
     // 잠시 대기 (API 요청 간 간격 유지)
     await Future.delayed(const Duration(seconds: 1));
 
-    // 2. Premium 모델 테스트 (Claude 3.7 Sonnet)
-    debugPrint('🧪 프리미엄 모델 (Claude 3.7 Sonnet) 테스트 시작');
+    // 2. Premium 모델 테스트
+    debugPrint('🧪 프리미엄 모델 ($premiumModel) 테스트 시작');
     final premiumResult = await generateChunk(
       prompt,
-      modelOverride: SubscriptionConstants.premiumAiModel,
+      modelOverride: premiumModel,
       trackPerformance: true
     );
     premiumStopwatch.stop();
@@ -489,12 +618,12 @@ class ApiService {
 
     return {
       'basic': {
-        'model': SubscriptionConstants.basicAiModel,
+        'model': basicModel,
         'response_time_ms': basicStopwatch.elapsedMilliseconds,
         'result': basicResult,
       },
       'premium': {
-        'model': SubscriptionConstants.premiumAiModel,
+        'model': premiumModel,
         'response_time_ms': premiumStopwatch.elapsedMilliseconds,
         'result': premiumResult,
       },
