@@ -268,6 +268,20 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
           debugPrint('💎 구독 사용자 청크 생성 - 광고 없음');
         }
 
+        // 무료 사용자인 경우 크레딧 차감
+        if (!_subscriptionService.isPremium) {
+          // 크레딧 사용 시도
+          final hasCredits = await _subscriptionService.useCredit();
+          if (!hasCredits) {
+            // 크레딧이 부족한 경우
+            throw BusinessException(
+              message: '무료 크레딧이 모두 소진되었습니다. 크레딧을 충전하거나 프리미엄으로 업그레이드하세요.',
+              type: BusinessErrorType.validationError,
+            );
+          }
+          debugPrint('💸 무료 크레딧 사용됨: 남은 개수 ${_subscriptionService.remainingCredits}');
+        }
+
         // API 서비스 테스트 (디버깅용)
         debugPrint('🔄 청크 생성 전 API 테스트');
         final apiService = getIt<ApiService>();
