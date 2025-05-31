@@ -1,8 +1,8 @@
 // lib/presentation/screens/subscription_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:chunk_up/core/services/subscription_service.dart';
-import 'package:chunk_up/core/services/ad_service.dart';
+import 'package:chunk_up/data/services/subscription/subscription_service.dart';
+import 'package:chunk_up/data/services/ads/ad_service.dart';
 import 'package:chunk_up/core/constants/subscription_constants.dart';
 import 'package:chunk_up/domain/models/subscription_plan.dart' as domain;
 import 'package:chunk_up/di/service_locator.dart';
@@ -170,24 +170,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   // 플랜 카드들
                   _buildPlanCard(domain.SubscriptionPlan.free, currentStatus),
                   const SizedBox(height: 12),
-                  _buildPlanCard(domain.SubscriptionPlan.basic, currentStatus),
-                  const SizedBox(height: 12),
                   _buildPlanCard(domain.SubscriptionPlan.premium, currentStatus),
                   
                   const SizedBox(height: 24),
                   
-                  // 무료 플랜 추가 생성 옵션 (광고 시청)
-                  if (currentStatus.subscriptionType == domain.SubscriptionType.free)
-                    ElevatedButton.icon(
-                      onPressed: (_adService?.isRewardedAdLoaded ?? false) ? _watchAdForFreeGeneration : null,
-                      icon: const Icon(Icons.video_library),
-                      label: const Text('광고 시청하고 1회 생성 추가하기'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber,
-                        foregroundColor: Colors.black87,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
                   
                   const SizedBox(height: 12),
                   
@@ -220,8 +206,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   const Text(
                     '• 구독은 1개월 단위로 자동 갱신됩니다.\n'
                     '• 갱신 24시간 이전에 해지하지 않으면 자동으로 결제됩니다.\n'
-                    '• 결제는 iTunes 또는 Google Play 계정으로 청구됩니다.\n'
-                    '• 구독은 앱스토어나 구글플레이 계정 설정에서 관리할 수 있습니다.',
+                    '• 구독은 구글플레이 계정 설정에서 관리할 수 있습니다.',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey,
@@ -301,11 +286,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     // 실제 남은 크레딧 수를 가져옴
                     final int realCredits = _directSubscriptionService?.remainingCredits ?? remainingGenerations;
 
-                    // 유료 구독 상태인 경우 월 100개 크레딧 표시
+                    // 유료 구독 상태인 경우 해당 플랜의 크레딧 표시
                     final isPaid = _directSubscriptionService?.isPaid ?? false;
                     final displayText = isPaid
                         ? '월간 크레딧: 100개'
-                        : '무료 크레딧: $realCredits개 남음';
+                        : '평생 무료 생성: ${5 - (_directSubscriptionService?.remainingGenerations ?? 0)}회 사용';
 
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -334,10 +319,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   }
                 )
               : Text(
-                  // Basic과 Premium 플랜은 월 100개 크레딧 제공
-                  currentPlan.type != domain.SubscriptionType.free
-                      ? '월간 크레딧: 100개'
-                      : '남은 생성 횟수: $remainingGenerations/${currentPlan.generationLimit}',
+                  // Premium은 100개 크레딧 제공
+                  currentPlan.type == domain.SubscriptionType.premium
+                      ? '월간 크레딧: ${status.remainingCredits}/100개'
+                      : '평생 무료 생성: ${status.generationCount}/5회 사용',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -354,10 +339,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   ),
                 ),
             const SizedBox(height: 8),
-            // Basic과 Premium 플랜은 100개 크레딧 진행 표시줄, 무료 플랜은 실제 남은 비율 표시
+            // Premium 플랜은 크레딧 진행 표시줄, 무료 플랜은 실제 남은 비율 표시
             currentPlan.type != domain.SubscriptionType.free
                 ? LinearProgressIndicator(
-                    value: 1.0, // 100개 중 100개 남음 (100%)
+                    value: status.remainingCredits / 100.0, // 100개 중 남은 크레딧 비율
                     backgroundColor: Theme.of(context).brightness == Brightness.dark
                         ? Colors.grey.shade800 // 다크 모드에서는 더 어두운 배경색
                         : Colors.grey.shade300,
@@ -379,18 +364,43 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     ),
                   ),
             const SizedBox(height: 16),
-            Text(
-              '현재 사용 중인 AI 모델: ${_getModelDisplayName(currentPlan.aiModel)}',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500, // 약간 더 두껍게
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.black87,
-                shadows: Theme.of(context).brightness == Brightness.dark
-                    ? [Shadow(color: Colors.black, blurRadius: 1.5)] // 다크 모드에서는 텍스트 가독성을 위해 그림자 추가
-                    : null,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '사용 가능한 AI 모델:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                    shadows: Theme.of(context).brightness == Brightness.dark
+                        ? [Shadow(color: Colors.black, blurRadius: 1.5)]
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ..._getAvailableModels(currentPlan.type).map((model) => 
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0, top: 2.0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.arrow_right, size: 16, color: Colors.orange),
+                        Text(
+                          model,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ).toList(),
+              ],
             ),
             const SizedBox(height: 8),
             Text(
@@ -516,11 +526,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             const SizedBox(height: 16),
             _buildPlanFeature(
               'AI 모델', 
-              _getModelDisplayName(plan.aiModel)
+              plan.allowsModelSelection ? '2개 모델 선택 가능' : 'Gemini Flash'
             ),
             _buildPlanFeature(
-              '월 출력 제한', 
-              '${plan.generationLimit}회'
+              plan.type == domain.SubscriptionType.premium ? '월 크레딧' : '평생 생성 제한', 
+              plan.type == domain.SubscriptionType.premium 
+                  ? '${plan.creditLimit} 크레딧' 
+                  : '${plan.generationLimit}회 (평생)'
             ),
             _buildPlanFeature(
               '단어 범위', 
@@ -541,6 +553,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             _buildPlanFeature(
               '캐릭터 생성',
               plan.allowsCharacterCreation ? '사용 가능' : '사용 불가'
+            ),
+            _buildPlanFeature(
+              '시리즈 생성/편집',
+              plan.allowsSeries ? '사용 가능' : '사용 불가'
             ),
             
             const SizedBox(height: 16),
@@ -675,12 +691,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   /// 상위 구독에서 하위 구독으로 전환하려는 시도인지 확인
   bool _isDowngradeAttempt(domain.SubscriptionType current, domain.SubscriptionType target) {
-    // 구독 등급: premium > basic > free
+    // 구독 등급: premium > free
     if (current == domain.SubscriptionType.premium) {
-      // 프리미엄에서 베이직이나 무료로 가려는 경우
-      return target == domain.SubscriptionType.basic || target == domain.SubscriptionType.free;
-    } else if (current == domain.SubscriptionType.basic) {
-      // 베이직에서 무료로 가려는 경우
+      // 프리미엄에서 무료로 가려는 경우
       return target == domain.SubscriptionType.free;
     }
     // 무료에서는 다운그레이드가 없음
@@ -736,10 +749,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     try {
       final result = await _adService!.showRewardedAd(
         onRewarded: () async {
-          await _subscriptionService!.addRewardedGeneration();
+          // 보상형 광고는 무료 사용자에게만 제공되며, 평생 5회 제한이므로 추가 불가
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('축하합니다! 무료 생성 1회가 추가되었습니다')),
+              const SnackBar(content: Text('무료 생성은 평생 5회로 제한됩니다. 프리미엄을 구독해주세요!')),
             );
           }
         },
@@ -775,15 +788,23 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return '${date.year}년 ${date.month}월 ${date.day}일';
   }
   
-  /// AI 모델 표시명 변환
+  /// AI 모델 표시명 변환 - 오직 Gemini만 사용
   String _getModelDisplayName(String modelId) {
-    if (modelId == SubscriptionConstants.basicAiModel) {
-      return 'Claude 3.5 Haiku (기본)';
-    } else if (modelId == SubscriptionConstants.premiumAiModel) {
-      return 'Claude 3.7 Sonnet (고급)';
-    } else if (modelId == SubscriptionConstants.freeAiModel) {
-      return 'Claude 3 Haiku (무료)';
+    return 'Gemini 2.5 Flash';
+  }
+
+  /// 플랜별 사용 가능한 AI 모델 목록
+  List<String> _getAvailableModels(domain.SubscriptionType planType) {
+    switch (planType) {
+      case domain.SubscriptionType.free:
+        return ['Gemini 2.5 Flash (1 크레딧)'];
+      case domain.SubscriptionType.premium:
+        return [
+          'Gemini 2.5 Flash (1 크레딧)',
+          'Claude Sonnet 4 (6 크레딧)',
+        ];
+      default:
+        return ['알 수 없음'];
     }
-    return modelId;
   }
 }

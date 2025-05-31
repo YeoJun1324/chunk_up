@@ -1,6 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:chunk_up/core/services/error_service.dart';
-import 'package:chunk_up/core/services/logging_service.dart';
+import 'package:chunk_up/infrastructure/error/error_service.dart';
+import 'package:chunk_up/infrastructure/logging/logging_service.dart';
 import 'package:get_it/get_it.dart';
 
 class ErrorBoundary extends StatefulWidget {

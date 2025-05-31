@@ -246,7 +246,10 @@ class _ChunkTestScreenState extends State<ChunkTestScreen> {
 
   Widget _buildChunkTestView() {
     final currentChunk = widget.chunks[_testManager.currentChunkIndex];
-    String processedParagraph = currentChunk.englishContent;
+    String processedParagraph = currentChunk.englishContent
+        .replaceAll('|||', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
 
     // 각 빈칸 위치에 gapId로 대체
     for (final entry in _testManager.correctGapMap.entries) {
@@ -563,7 +566,7 @@ class _ChunkTestScreenState extends State<ChunkTestScreen> {
                         ),
                       ] else
                         Text(
-                          '_'.padRight(correctWord.length, '_'),
+                          '______', // 6개의 고정 밑줄로 통일
                           style: TextStyle(
                             color: Theme.of(context).brightness == Brightness.dark
                               ? Colors.grey.shade400
@@ -598,6 +601,7 @@ class _ChunkTestScreenState extends State<ChunkTestScreen> {
         ),
         children: spans,
       ),
+      textAlign: TextAlign.justify,
     );
   }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chunk_up/core/utils/api_exception.dart';
 import 'package:chunk_up/core/utils/business_exception.dart';
-import 'package:chunk_up/core/services/logging_service.dart';
+import 'package:chunk_up/infrastructure/logging/logging_service.dart';
 import 'package:get_it/get_it.dart';
 
 /// Centralized error handling

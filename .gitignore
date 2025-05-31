@@ -80,3 +80,8 @@ firebase_app_id_file.json
 /windows/
 /linux/
 /web/
+# Environment files with API keys
+.env
+.env.local
+.env.*.local
+*.env

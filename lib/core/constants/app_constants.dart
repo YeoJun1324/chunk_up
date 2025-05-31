@@ -34,6 +34,6 @@ class AppConstants {
   static const String testHistoryStorageKey = 'test_history';
   static const String learningHistoryStorageKey = 'learning_history';
   static const String reviewRemindersStorageKey = 'review_reminders';
-  static const String customCharactersStorageKey = 'custom_characters';
   static const String foldersStorageKey = 'folders';
+  static const String customCharactersStorageKey = 'custom_characters';
 }

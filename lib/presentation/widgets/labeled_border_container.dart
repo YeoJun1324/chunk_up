@@ -129,6 +129,7 @@ class LabeledTextField extends StatelessWidget {
   final TextInputType keyboardType;
   final bool? hasValueOverride; // 외부에서 값 유무를 직접 설정할 수 있는 속성
   final String? Function(String?)? validator;
+  final TextAlign textAlign;
 
   const LabeledTextField({
     Key? key,
@@ -144,6 +145,7 @@ class LabeledTextField extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.hasValueOverride, // 새로운 매개변수 추가
     this.validator,
+    this.textAlign = TextAlign.start,
   }) : super(key: key);
 
   @override
@@ -164,24 +166,47 @@ class LabeledTextField extends StatelessWidget {
       hasValue: hasValue, // 값 유무 전달
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12.0),
-        child: TextFormField(
-          controller: controller,
-          onChanged: onChanged,
-          maxLines: maxLines,
-          keyboardType: keyboardType,
-          validator: validator,
-          // 다크 모드에서 텍스트 색상 조정
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            // 다크 모드에서 힌트 텍스트 색상 조정
-            hintStyle: TextStyle(
-              color: isDarkMode ? Colors.grey.shade400.withOpacity(0.7) : Colors.grey.shade400,
+        child: Theme(
+          // 전역 테마 설정을 오버라이드
+          data: Theme.of(context).copyWith(
+            inputDecorationTheme: const InputDecorationTheme(
+              filled: false,
+              fillColor: Colors.transparent,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
             ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12.0),
+          ),
+          child: TextFormField(
+            controller: controller,
+            onChanged: onChanged,
+            maxLines: maxLines,
+            keyboardType: keyboardType,
+            validator: validator,
+            textAlign: textAlign,
+            // 다크 모드에서 텍스트 색상 조정
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black,
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              // 다크 모드에서 힌트 텍스트 색상 조정
+              hintStyle: TextStyle(
+                color: isDarkMode ? Colors.grey.shade400.withValues(alpha: 0.7) : Colors.grey.shade400,
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              filled: false,
+              fillColor: Colors.transparent,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12.0),
+            ),
           ),
         ),
       ),

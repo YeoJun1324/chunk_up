@@ -1,41 +1,48 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 import 'app/app_initializer.dart';
 import 'core/widgets/error_boundary.dart';
 import 'domain/services/api_service_interface.dart';
-import 'core/services/api_service.dart';
-import 'core/services/cache_service_v2.dart';
-import 'core/services/notification_service.dart';
-import 'core/services/review_service.dart';
-import 'core/services/navigation_service.dart';
-import 'core/services/route_service.dart';
-import 'core/services/logging_service.dart';
-import 'core/utils/character_migration_helper.dart';
+import 'data/services/cache/cache_service.dart';
+import 'data/services/notifications/notification_service.dart';
+import 'domain/services/review/review_service.dart';
+import 'infrastructure/navigation/navigation_service.dart';
+import 'infrastructure/navigation/route_service.dart';
+import 'infrastructure/logging/logging_service.dart';
 import 'presentation/providers/word_list_notifier.dart';
 import 'presentation/providers/folder_notifier.dart';
 import 'presentation/providers/theme_notifier.dart';
-import 'presentation/screens/home_screen.dart';
-import 'presentation/screens/word_list_screen.dart';
-import 'presentation/screens/create_chunk_screen.dart';
-import 'presentation/screens/settings_screen.dart';
-import 'presentation/screens/word_list_detail_screen.dart';
-import 'domain/models/word_list_info.dart';
-import 'presentation/screens/learning_stats_screen.dart';
-import 'presentation/screens/learning_selection_screen.dart';
-import 'presentation/screens/test_screen.dart';
-import 'presentation/screens/import_screen.dart';
-import 'presentation/screens/api_key_setup_screen.dart';
 import 'core/constants/route_names.dart';
 import 'core/theme/app_theme.dart';
 import 'di/dependency_injection.dart' as di;
 
 void main() {
+  // Setup error widget for better error display
+  _setupErrorWidget();
+  
   // Run everything in the same zone
   runZonedGuarded(() async {
+    // Flutter 바인딩 초기화 (Firebase 초기화 전에 필수)
+    WidgetsFlutterBinding.ensureInitialized();
+    
+    // Firebase 초기화
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      print('✅ Firebase 초기화 성공');
+    } catch (e) {
+      print('⚠️ Firebase 초기화 실패: $e');
+      // Firebase 없이도 앱이 계속 실행되도록 함
+    }
+    
     // Initialize app with error handling
     await AppInitializer.initialize(
       environment: di.Environment.production,
@@ -77,28 +84,45 @@ void main() {
       ),
     );
   }, (error, stack) {
-    // 처리되지 않은 에러 로깅
-    print('Uncaught error: $error');
-    print('Stack trace: $stack');
+    // 처리되지 않은 에러는 AppInitializer의 PlatformDispatcher.onError에서 처리됨
+    // 여기서는 기본 로깅만 수행
+    debugPrint('Uncaught error in main zone: $error');
+    if (kDebugMode) {
+      debugPrint('Stack trace: $stack');
+    }
   });
 }
 
 /// 백그라운드에서 초기화 작업 수행
 void _initializeBackgroundServices() async {
+  final logger = GetIt.instance.isRegistered<LoggingService>() 
+      ? GetIt.instance<LoggingService>() 
+      : null;
+
   // 캐시 서비스 정리 스케줄링
   try {
-    if (GetIt.instance.isRegistered<CacheServiceV2>()) {
-      final cacheService = GetIt.instance<CacheServiceV2>();
-      // CacheServiceV2는 scheduleCleanup 메소드가 없으므로 주석 처리
-      // cacheService.scheduleCleanup();
+    if (GetIt.instance.isRegistered<CacheService>()) {
+      final cacheService = GetIt.instance<CacheService>();
+      // 즉시 한 번 정리
+      await cacheService.cleanExpired();
+      // 주기적 정리 시작
+      cacheService.startPeriodicCleanup(interval: const Duration(hours: 6));
+      logger?.logInfo('Cache cleanup scheduled successfully');
     }
-  } catch (_) {}
+  } catch (e) {
+    logger?.logError('Cache service initialization failed', error: e);
+    debugPrint('Cache service initialization failed: $e');
+  }
 
   // 알림 서비스 초기화
   try {
     final notificationService = GetIt.instance<NotificationService>();
     await notificationService.initialize();
-  } catch (_) {}
+    logger?.logInfo('Notification service initialized');
+  } catch (e) {
+    logger?.logError('Notification service initialization failed', error: e);
+    debugPrint('Notification service initialization failed: $e');
+  }
 
   // 복습 알림 확인
   try {
@@ -107,15 +131,22 @@ void _initializeBackgroundServices() async {
 
     if (hasTodayReminders) {
       await reviewService.sendDailyReviewNotifications();
+      logger?.logInfo('Daily review notifications sent');
     }
-  } catch (_) {}
+  } catch (e) {
+    logger?.logError('Review service error', error: e);
+    debugPrint('Review service error: $e');
+  }
 
-  // 구 캐릭터 데이터 정리
-  await CharacterMigrationHelper.cleanupOldCharacterData();
 
   // API 서비스 테스트
-  final apiService = GetIt.instance<ApiServiceInterface>();
-  await _testApiService(apiService);
+  try {
+    final apiService = GetIt.instance<ApiServiceInterface>();
+    await _testApiService(apiService);
+  } catch (e) {
+    logger?.logError('API service test failed', error: e);
+    debugPrint('API service test failed: $e');
+  }
 }
 
 class ChunkVocabApp extends StatelessWidget {
@@ -173,14 +204,61 @@ Future<void> _testApiService(ApiServiceInterface apiService) async {
   }
 }
 
-void _setupGlobalErrorHandler() {
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    final logger = GetIt.instance<LoggingService>();
-    logger.logError(
-      'Flutter error',
-      error: details.exception,
-      stackTrace: details.stack,
+// 이 함수는 AppInitializer에서 처리하므로 제거됨
+
+/// 에러 위젯 설정 - UI 에러 시 더 나은 화면 표시
+void _setupErrorWidget() {
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      child: Container(
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: Colors.red.shade400,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '오류가 발생했습니다',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                kDebugMode 
+                    ? details.exception.toString()
+                    : '앱에서 예기치 않은 오류가 발생했습니다.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.red.shade600,
+                ),
+              ),
+              if (kDebugMode) ...[
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Text(
+                      details.stack.toString(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   };
 }

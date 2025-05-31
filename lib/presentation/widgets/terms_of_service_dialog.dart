@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:chunk_up/presentation/screens/terms_of_service_screen.dart';
 
 class TermsOfServiceDialog extends StatelessWidget {
   const TermsOfServiceDialog({Key? key}) : super(key: key);
@@ -30,23 +29,6 @@ class TermsOfServiceDialog extends StatelessWidget {
             _buildBulletPoint('앱 서비스는 기술적 문제로 일시 중단될 수 있습니다.'),
             _buildBulletPoint('무료로 제공되는 서비스의 손해에 대해 회사는 책임을 지지 않습니다.'),
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const TermsOfServiceScreen(),
-                  ),
-                );
-              },
-              child: const Text(
-                '전체 이용약관 보기',
-                style: TextStyle(
-                  color: Colors.blue,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
           ],
         ),
       ),

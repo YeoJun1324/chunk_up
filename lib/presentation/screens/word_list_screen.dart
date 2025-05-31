@@ -9,6 +9,7 @@ import 'package:chunk_up/core/constants/route_names.dart';
 import 'word_list_detail_screen.dart';
 import 'word_list_search_screen.dart';
 import 'package:chunk_up/core/utils/korean_search_helper.dart';
+import 'package:chunk_up/core/theme/app_colors.dart';
 
 class WordListScreen extends StatefulWidget {
   const WordListScreen({super.key});
@@ -55,7 +56,7 @@ class _WordListScreenState extends State<WordListScreen> {
               }
 
               // 다크 모드에 맞는 색상 선택
-              final color = isDarkMode ? Colors.lightGreen : Colors.green;
+              final color = AppColors.success;
 
               return Positioned(
                 left: index * segmentWidth,
@@ -87,12 +88,37 @@ class _WordListScreenState extends State<WordListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('내 단어장'),
+        title: const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('내 단어장'),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
             tooltip: '단어장 검색',
             onPressed: () => _navigateToSearchScreen(context),
+          ),
+          // PDF 내보내기 버튼 추가
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.purple.shade400, Colors.purple.shade600],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.picture_as_pdf,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              tooltip: 'PDF 내보내기',
+              onPressed: () => Navigator.pushNamed(context, '/premium-export'),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.tune),
@@ -143,6 +169,7 @@ class _WordListScreenState extends State<WordListScreen> {
           );
         },
       ),
+      // 프리미엄 PDF 내보내기 플로팅 액션 버튼
     );
   }
 
@@ -240,22 +267,12 @@ class _WordListScreenState extends State<WordListScreen> {
                     },
                   ),
 
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.picture_as_pdf, color: Colors.green),
-                    ),
-                    title: const Text('단어장 내보내기'),
-                    subtitle: const Text('단어장을 PDF 파일로 내보냅니다'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _navigateToExportScreen(context);
-                    },
+                  // 구분선 추가
+                  Divider(
+                    color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
                   ),
+
+                  // 프리미엄 PDF 내보내기 (강조)
                 ],
               ),
             ),

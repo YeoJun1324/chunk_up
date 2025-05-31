@@ -1,8 +1,127 @@
+// lib/core/constants/prompt_templates.dart
 import 'prompt_config.dart';
 
-/// 프롬프트 템플릿 상수 및 관련 설정
+/// 프롬프트 템플릿 상수
 class PromptTemplates {
-  // 출력 형식별 프롬프트 지시문
+  // 기본 프롬프트 템플릿
+  static const String basePromptTemplate = """
+You are an expert educational content creator specializing in contextual vocabulary learning.
+
+Your task is to create an engaging, natural story that teaches vocabulary through context.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 VOCABULARY WORDS TO INCLUDE:
+{words}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 REQUIREMENTS:
+• Word Count: Between {minLength} and {maxLength} words
+• Include ALL vocabulary words naturally in the content
+• Each word should be used in a meaningful context that demonstrates its meaning
+• The content should flow naturally and be engaging
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{outputFormat}
+
+{characterContext}
+
+{scenarioContext}
+
+{advancedContext}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 OUTPUT FORMAT (JSON):
+```json
+{
+  "title": "Creative title for the content",
+  "englishContent": "The main content in English with vocabulary words naturally integrated",
+  "koreanTranslation": "Natural Korean translation of the entire content",
+  "wordMappings": {
+    "vocabulary_word_1": "한국어 뜻",
+    "vocabulary_word_2": "한국어 뜻"
+  },
+  "wordExplanations": {
+    "vocabulary_word_1": "한국어 뜻: 이 문맥에서 이 단어가 어떻게 사용되었는지에 대한 설명",
+    "vocabulary_word_2": "한국어 뜻: 이 문맥에서 이 단어가 어떻게 사용되었는지에 대한 설명"
+  }
+}
+```
+
+⚠️ CRITICAL REQUIREMENTS:
+
+📝 CONTENT REQUIREMENTS:
+• Title: Creative and relevant to the story content
+• Vocabulary: Each vocabulary word MUST appear in the English content
+• Story: Keep coherent and engaging throughout
+• NO EMPHASIS: Do NOT use *, _, **, or any other markers to emphasize vocabulary words or translations
+• PLAIN TEXT ONLY: All vocabulary words must appear as plain text in the English content
+• NO MARKDOWN: Avoid bold, italic, or any markdown formatting in the content
+
+🎭 CANON COMPLIANCE (when using existing works/characters):
+• If the character is from an existing work (movie, book, game, etc.), strictly maintain:
+  - Character personality, speech patterns, and behavioral traits
+  - World-building rules and lore consistency
+  - Canonical relationships and power dynamics
+  - Setting-appropriate technology, magic systems, or physics
+  - Timeline consistency if a specific time point is mentioned
+• Examples:
+  - Sherlock Holmes: Victorian-era setting, deductive reasoning, British mannerisms
+  - Harry Potter characters: Consistent with magical rules, house traits, British wizarding culture
+  - Marvel/DC characters: Respect established powers, relationships, and universe rules
+• Do NOT introduce elements that contradict the source material
+
+🔄 TRANSLATION REQUIREMENTS:
+• Korean translation: Natural translation without special formatting
+• 1:1 Mapping: SAME NUMBER of sentences in English and Korean
+  - Count sentences by ||| delimiters
+  - Each English ||| must have corresponding Korean |||
+  - Complex sentences (colons, semicolons, lists) remain as single units
+
+📊 JSON FIELD REQUIREMENTS:
+• wordMappings: English word → Korean translation
+• wordExplanations: Korean format required - THIS FIELD IS MANDATORY
+  - Structure: "한국어 뜻: 문맥상 사용 설명"
+  - Example: "포괄적인: 이 문맥에서는 사건 파일이 모든 관련 정보를 빠짐없이 담고 있다는 의미로 사용되었습니다"
+  - MUST include explanations for ALL vocabulary words
+  - Do NOT leave wordExplanations empty or omit this field
+
+⚡ SENTENCE DELIMITER RULES (|||):
+• Add ||| at the end of EVERY sentence WITHOUT any following space
+• Sentence ending guidelines:
+  a) Standard: End at . ! ? + ||| (NO SPACE)
+     ✓ Dr. Watson observed the temperature was 98.6 degrees.|||
+     ✗ Dr.||| Watson observed...
+  
+  b) Dialogue + Attribution: Keep together
+     ✓ "Hello," he said.|||
+     ✓ "Hmm," Watson pondered.|||
+     ✗ "Hello,"|||
+  
+  c) Lists/Enumerations: Single sentence
+     ✓ Holmes noted: first, the time; second, the place.|||
+  
+  d) Ellipsis/Dash: End at punctuation
+     ✓ "I was thinking..."|||He paused.|||
+     ✓ "Wait—"|||The door slammed.|||
+  
+  e) Parentheses/Brackets: Include in sentence
+     ✓ The report stated (see Appendix A).|||
+  
+  f) Interjections/Onomatopoeia:
+     ✓ "Aha!"|||Bang!||| (standalone)
+     ✓ "Click!" went the lock.||| (with attribution)
+
+⚠️ CRITICAL: NO SPACE after |||
+⚠️ FINAL CHECK: English and Korean MUST have EXACTLY the same number of ||| delimiters
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+""";
+
+  // 출력 형식별 지시문
   static const Map<OutputFormat, String> formatInstructions = {
     OutputFormat.dialogue: """
 FORMAT: Write as a dialogue between characters
@@ -28,14 +147,6 @@ FORMAT: Write as third-person narrative
 - Literary narrative voice
 - Show don't tell approach""",
     
-    OutputFormat.thought: """
-FORMAT: Write as internal thoughts/stream of consciousness
-- First-person internal perspective
-- Raw, unfiltered thoughts
-- Fragmented or flowing as appropriate
-- Intimate and psychological
-- Character's personality reflected in thought patterns""",
-    
     OutputFormat.letter: """
 FORMAT: Write as a letter or diary entry
 - Written communication format
@@ -43,6 +154,14 @@ FORMAT: Write as a letter or diary entry
 - Personal writing style
 - Character's voice in written form
 - Closing signature matching the character""",
+    
+    OutputFormat.thought: """
+FORMAT: Write as internal thoughts/stream of consciousness
+- First-person internal perspective
+- Raw, unfiltered thoughts
+- Fragmented or flowing as appropriate
+- Intimate and psychological
+- Character's personality reflected in thought patterns""",
     
     OutputFormat.description: """
 FORMAT: Write as scene/situation description
@@ -52,79 +171,6 @@ FORMAT: Write as scene/situation description
 - Mood and tone setting
 - Cinematic description style""",
   };
-
-  // 시점별 설명
-  static const Map<TimePoint, String> timePointDescriptions = {
-    TimePoint.beforeEvent: "Before the main event, building anticipation",
-    TimePoint.duringEvent: "During the main event, in the heat of the moment",
-    TimePoint.afterEvent: "After the event, dealing with consequences",
-    TimePoint.flashback: "A flashback to an earlier time",
-    TimePoint.climax: "At the climactic moment of tension",
-    TimePoint.resolution: "After resolution, finding peace or closure",
-  };
-
-  // 감정 상태별 설명
-  static const Map<EmotionalState, String> emotionalDescriptions = {
-    EmotionalState.desperate: "Feeling desperate and at wit's end",
-    EmotionalState.determined: "Filled with determination and resolve",
-    EmotionalState.confused: "Confused and uncertain about the situation",
-    EmotionalState.melancholic: "Melancholic and contemplative mood",
-    EmotionalState.hopeful: "Hopeful despite the circumstances",
-    EmotionalState.angry: "Angry and frustrated",
-    EmotionalState.peaceful: "At peace with the situation",
-    EmotionalState.anxious: "Anxious and worried about what's to come",
-  };
-
-  // 톤별 설명
-  static const Map<Tone, String> toneDescriptions = {
-    Tone.serious: "Serious and weighty tone",
-    Tone.tragic: "Tragic and sorrowful atmosphere",
-    Tone.hopeful: "Hopeful and optimistic tone",
-    Tone.dark: "Dark and ominous mood",
-    Tone.nostalgic: "Nostalgic and reminiscent feeling",
-    Tone.tense: "Tense and suspenseful atmosphere",
-    Tone.intimate: "Intimate and personal tone",
-    Tone.philosophical: "Philosophical and contemplative mood",
-  };
-
-  // 기본 프롬프트 템플릿
-  static const String basePromptTemplate = """
-You are a creative writer helping students learn vocabulary through contextual stories.
-
-TASK: Create a cohesive and engaging paragraph that naturally incorporates ALL the following vocabulary words.
-
-VOCABULARY WORDS TO INCLUDE:
-{words}
-
-{formatInstruction}
-
-{advancedContext}
-
-REQUIREMENTS:
-1. Use EVERY word from the list at least once
-2. Maintain natural flow - words should fit contextually
-3. Keep the content appropriate and educational
-4. Length: {minLength}-{maxLength} words
-5. Make the content engaging and memorable
-6. Ensure vocabulary usage helps students understand word meanings through context
-
-{characterContext}
-
-{scenarioContext}
-
-OUTPUT FORMAT:
-Return a JSON object with this structure:
-{
-  "englishContent": "The generated paragraph in English",
-  "koreanTranslation": "Korean translation of the paragraph",
-  "wordExplanations": {
-    "word1": "이 단어가 문맥에서 어떻게 사용되었는지 한국어로 설명",
-    "word2": "이 단어가 문맥에서 어떻게 사용되었는지 한국어로 설명"
-  }
-}
-
-Remember: Quality over complexity. Focus on creating content that helps students learn.
-""";
 
   // 캐릭터 컨텍스트 템플릿
   static const String characterContextTemplate = """
@@ -154,153 +200,4 @@ ADVANCED CONTEXT:
 {customSetting}
 {specialElements}
 """;
-}
-
-// 출력 형식 열거형
-enum OutputFormat {
-  dialogue,     // 대화문
-  monologue,    // 독백
-  narrative,    // 나레이션
-  letter,       // 편지/일기
-  thought,      // 내적 독백
-  description,  // 상황 묘사
-}
-
-// 시점 열거형
-enum TimePoint {
-  beforeEvent,    // 사건 전
-  duringEvent,    // 사건 중
-  afterEvent,     // 사건 후
-  flashback,      // 회상
-  climax,         // 클라이맥스
-  resolution,     // 해결 후
-  custom,         // 사용자 정의
-}
-
-// 감정 상태 열거형
-enum EmotionalState {
-  desperate,      // 절망적인
-  determined,     // 결의에 찬
-  confused,       // 혼란스러운
-  melancholic,    // 우울한
-  hopeful,        // 희망적인
-  angry,          // 분노한
-  peaceful,       // 평온한
-  anxious,        // 불안한
-}
-
-// 톤 열거형
-enum Tone {
-  serious,        // 진지한
-  tragic,         // 비극적인
-  hopeful,        // 희망적인
-  dark,           // 어두운
-  nostalgic,      // 향수적인
-  tense,          // 긴장감 있는
-  intimate,       // 친밀한
-  philosophical,  // 철학적인
-}
-
-// 고급 설정 클래스
-class AdvancedSettings {
-  final TimePoint? timePoint;
-  final String? customTimePoint;
-  final EmotionalState? emotionalState;
-  final Tone? tone;
-  final String? customSetting;
-  final List<String>? specialElements;
-
-  const AdvancedSettings({
-    this.timePoint,
-    this.customTimePoint,
-    this.emotionalState,
-    this.tone,
-    this.customSetting,
-    this.specialElements,
-  });
-
-  // 고급 컨텍스트를 문자열로 변환
-  String toContextString() {
-    final parts = <String>[];
-    
-    if (timePoint != null) {
-      parts.add('- Time Point: ${PromptTemplates.timePointDescriptions[timePoint]}');
-    }
-    
-    if (emotionalState != null) {
-      parts.add('- Emotional State: ${PromptTemplates.emotionalDescriptions[emotionalState]}');
-    }
-    
-    if (tone != null) {
-      parts.add('- Tone: ${PromptTemplates.toneDescriptions[tone]}');
-    }
-    
-    if (customSetting?.isNotEmpty == true) {
-      parts.add('- Setting: $customSetting');
-    }
-    
-    if (specialElements?.isNotEmpty == true) {
-      parts.add('- Special Elements: ${specialElements!.join(', ')}');
-    }
-    
-    return parts.isEmpty ? '' : parts.join('\n');
-  }
-}
-
-// 프롬프트 빌더 헬퍼 클래스
-class PromptBuilder {
-  static String buildPrompt({
-    required List<String> words,
-    required OutputFormat outputFormat,
-    required int minLength,
-    required int maxLength,
-    String? characterName,
-    String? characterDescription,
-    String? characterPersonality,
-    String? characterSetting,
-    String? scenario,
-    AdvancedSettings? advancedSettings,
-  }) {
-    String prompt = PromptTemplates.basePromptTemplate;
-    
-    // 단어 목록 삽입
-    prompt = prompt.replaceAll('{words}', words.join(', '));
-    
-    // 출력 형식 지시문 삽입
-    prompt = prompt.replaceAll(
-      '{formatInstruction}', 
-      PromptTemplates.formatInstructions[outputFormat] ?? ''
-    );
-    
-    // 길이 설정
-    prompt = prompt.replaceAll('{minLength}', minLength.toString());
-    prompt = prompt.replaceAll('{maxLength}', maxLength.toString());
-    
-    // 고급 컨텍스트 삽입
-    final advancedContext = advancedSettings?.toContextString() ?? '';
-    prompt = prompt.replaceAll('{advancedContext}', advancedContext);
-    
-    // 캐릭터 컨텍스트 삽입
-    if (characterName?.isNotEmpty == true) {
-      String characterContext = PromptTemplates.characterContextTemplate;
-      characterContext = characterContext.replaceAll('{characterName}', characterName!);
-      characterContext = characterContext.replaceAll('{characterDescription}', characterDescription ?? '');
-      characterContext = characterContext.replaceAll('{characterPersonality}', characterPersonality ?? '');
-      characterContext = characterContext.replaceAll('{characterSetting}', characterSetting ?? '');
-      prompt = prompt.replaceAll('{characterContext}', characterContext);
-    } else {
-      prompt = prompt.replaceAll('{characterContext}', '');
-    }
-    
-    // 시나리오 컨텍스트 삽입
-    if (scenario?.isNotEmpty == true) {
-      String scenarioContext = PromptTemplates.scenarioContextTemplate;
-      scenarioContext = scenarioContext.replaceAll('{scenario}', scenario!);
-      prompt = prompt.replaceAll('{scenarioContext}', scenarioContext);
-    } else {
-      prompt = prompt.replaceAll('{scenarioContext}', '');
-    }
-    
-    return prompt.trim();
-  }
 }

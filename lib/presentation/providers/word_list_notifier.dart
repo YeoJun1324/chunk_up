@@ -7,8 +7,8 @@ import 'package:chunk_up/domain/repositories/word_list_repository_interface.dart
 import 'package:chunk_up/domain/repositories/chunk_repository_interface.dart';
 import 'package:chunk_up/domain/usecases/create_word_list_use_case.dart';
 import 'package:chunk_up/core/utils/business_exception.dart';
-import 'package:chunk_up/core/services/error_service.dart';
-import 'package:chunk_up/core/services/logging_service.dart';
+import 'package:chunk_up/infrastructure/error/error_service.dart';
+import 'package:chunk_up/infrastructure/logging/logging_service.dart';
 
 /// 단어장 데이터를 관리하는 Provider
 /// 
@@ -34,7 +34,8 @@ class WordListNotifier with ChangeNotifier {
   })  : _wordListRepository = wordListRepository,
         _chunkRepository = chunkRepository,
         _createWordListUseCase = createWordListUseCase {
-    _loadData();
+    // 생성자에서 직접 로드하는 대신, 명시적 초기화 메서드 제공
+    loadWordLists();
   }
 
   /// 단어장 목록 (수정 불가능한 목록으로 반환)
@@ -53,7 +54,12 @@ class WordListNotifier with ChangeNotifier {
     return false;
   }
 
-  /// 데이터 로드
+  /// 데이터 로드 (public 메서드 추가)
+  Future<void> loadWordLists() async {
+    await _loadData();
+  }
+
+  /// 데이터 로드 (내부 사용)
   Future<void> _loadData() async {
     try {
       _setLoading(true);
@@ -67,6 +73,7 @@ class WordListNotifier with ChangeNotifier {
           // 내용이 변경된 경우에만 상태 업데이트 및 알림
           if (!_areListsEqual(_wordLists, loadedWordLists)) {
             _wordLists = List<WordListInfo>.from(loadedWordLists);
+            notifyListeners(); // 데이터가 변경되었을 때 명시적으로 알림
           }
         },
       );
@@ -80,15 +87,26 @@ class WordListNotifier with ChangeNotifier {
   /// 두 목록이 동일한지 확인 (내용 비교)
   bool _areListsEqual(List<WordListInfo> list1, List<WordListInfo> list2) {
     if (list1.length != list2.length) return false;
-
-    for (int i = 0; i < list1.length; i++) {
-      if (list1[i].name != list2[i].name ||
-          list1[i].words.length != list2[i].words.length ||
-          list1[i].chunkCount != list2[i].chunkCount) {
+    
+    // Map으로 변환하여 O(n) 시간복잡도로 비교
+    final map1 = {for (var item in list1) item.name: item};
+    final map2 = {for (var item in list2) item.name: item};
+    
+    // 키 집합이 다르면 false
+    if (!map1.keys.toSet().containsAll(map2.keys)) return false;
+    
+    // 각 항목의 내용 비교
+    for (final key in map1.keys) {
+      final item1 = map1[key]!;
+      final item2 = map2[key];
+      if (item2 == null ||
+          item1.words.length != item2.words.length ||
+          item1.chunkCount != item2.chunkCount ||
+          (item1.chunks?.length ?? 0) != (item2.chunks?.length ?? 0)) {
         return false;
       }
     }
-
+    
     return true;
   }
 
@@ -149,8 +167,19 @@ class WordListNotifier with ChangeNotifier {
         // 단어 추가
         await _wordListRepository.addWordToList(wordList, newWord);
         
-        // 목록 새로고침 (저장소에서 최신 데이터 로드)
-        await _loadData();
+        // 로컬 상태만 업데이트 (전체 리로드 대신)
+        final index = _wordLists.indexWhere((list) => list.name == listName);
+        if (index != -1) {
+          final updatedList = _wordLists[index].copyWith(
+            words: [..._wordLists[index].words, newWord],
+          );
+          _wordLists = List<WordListInfo>.from(_wordLists)
+            ..[index] = updatedList;
+          notifyListeners();
+        } else {
+          // 로컬 상태와 불일치 시에만 전체 리로드
+          await _loadData();
+        }
       },
     );
   }

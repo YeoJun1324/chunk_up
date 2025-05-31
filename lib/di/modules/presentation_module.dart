@@ -11,14 +11,14 @@ import 'package:chunk_up/domain/usecases/create_word_list_use_case.dart';
 /// 프레젠테이션 모듈 - UI 관련 상태 관리 객체를 등록합니다.
 class PresentationModule {
   static Future<void> register(GetIt getIt) async {
-    // 프로바이더
-    getIt.registerFactory<WordListNotifier>(() => WordListNotifier(
+    // 프로바이더 - 싱글톤으로 변경
+    getIt.registerLazySingleton<WordListNotifier>(() => WordListNotifier(
       wordListRepository: getIt<WordListRepositoryInterface>(),
       chunkRepository: getIt<ChunkRepositoryInterface>(),
       createWordListUseCase: getIt<CreateWordListUseCase>(),
     ));
     
-    getIt.registerFactory<FolderNotifier>(() => FolderNotifier());
-    getIt.registerFactory<ThemeNotifier>(() => ThemeNotifier());
+    getIt.registerLazySingleton<FolderNotifier>(() => FolderNotifier());
+    getIt.registerLazySingleton<ThemeNotifier>(() => ThemeNotifier());
   }
 }

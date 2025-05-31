@@ -32,7 +32,10 @@ class WordHighlighter {
       textColor,
     );
 
-    return RichText(text: TextSpan(children: spans));
+    return RichText(
+      text: TextSpan(children: spans),
+      textAlign: TextAlign.justify,
+    );
   }
 
   /// 텍스트 내에서 강조할 단어의 위치를 찾습니다.

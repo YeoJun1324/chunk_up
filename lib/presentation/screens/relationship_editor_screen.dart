@@ -1,9 +1,10 @@
 // lib/presentation/screens/relationship_editor_screen.dart
 import 'package:flutter/material.dart';
 import 'package:chunk_up/domain/models/character.dart';
-import 'package:chunk_up/core/services/enhanced_character_service.dart';
-import 'package:chunk_up/core/services/series_service.dart';
+import 'package:chunk_up/domain/services/character/enhanced_character_service.dart';
+import 'package:chunk_up/domain/services/series/series_service.dart';
 import 'package:uuid/uuid.dart';
+import '../widgets/labeled_border_container.dart';
 
 class RelationshipEditorScreen extends StatefulWidget {
   final String seriesId;
@@ -313,68 +314,174 @@ class _RelationshipDialogState extends State<RelationshipDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.relationship == null ? '관계 추가' : '관계 편집'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: _characterAId,
-                decoration: const InputDecoration(labelText: '캐릭터 A'),
-                items: widget.characters.map((c) => DropdownMenuItem(
-                  value: c.id,
-                  child: Text(c.name),
-                )).toList(),
-                onChanged: (value) => setState(() => _characterAId = value),
-                validator: (value) => value == null ? '캐릭터를 선택하세요' : null,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _characterBId,
-                decoration: const InputDecoration(labelText: '캐릭터 B'),
-                items: widget.characters.map((c) => DropdownMenuItem(
-                  value: c.id,
-                  child: Text(c.name),
-                )).toList(),
-                onChanged: (value) => setState(() => _characterBId = value),
-                validator: (value) {
-                  if (value == null) return '캐릭터를 선택하세요';
-                  if (value == _characterAId) return '다른 캐릭터를 선택하세요';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: '관계 설명',
-                  hintText: '두 캐릭터의 관계를 설명하세요',
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
                 ),
-                maxLines: 3,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return '관계 설명을 입력하세요';
-                  }
-                  return null;
-                },
               ),
-            ],
-          ),
+              child: Row(
+                children: [
+                  Icon(
+                    widget.relationship == null ? Icons.add_link : Icons.edit,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    widget.relationship == null ? '관계 추가' : '관계 편집',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LabeledDropdown<String>(
+                        label: '캐릭터 A',
+                        hint: '캐릭터를 선택하세요',
+                        isRequired: true,
+                        value: _characterAId,
+                        focusedBorderColor: Theme.of(context).primaryColor,
+                        items: widget.characters.map((c) => DropdownMenuItem(
+                          value: c.id,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 14,
+                                child: Text(c.name[0]),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(c.name),
+                            ],
+                          ),
+                        )).toList(),
+                        onChanged: (value) => setState(() => _characterAId = value),
+                      ),
+                      const SizedBox(height: 16),
+                      LabeledDropdown<String>(
+                        label: '캐릭터 B',
+                        hint: '캐릭터를 선택하세요',
+                        isRequired: true,
+                        value: _characterBId,
+                        focusedBorderColor: Theme.of(context).primaryColor,
+                        items: widget.characters
+                            .where((c) => c.id != _characterAId)
+                            .map((c) => DropdownMenuItem(
+                          value: c.id,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 14,
+                                child: Text(c.name[0]),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(c.name),
+                            ],
+                          ),
+                        )).toList(),
+                        onChanged: (value) => setState(() => _characterBId = value),
+                      ),
+                      const SizedBox(height: 16),
+                      LabeledTextField(
+                        label: '관계 설명',
+                        hint: '두 캐릭터의 관계를 설명하세요',
+                        isRequired: true,
+                        controller: _descriptionController,
+                        maxLines: 4,
+                        focusedBorderColor: Theme.of(context).primaryColor,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return '관계 설명을 입력하세요';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Actions
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.grey.shade300),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: const Text('취소'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (_formKey.currentState!.validate()) {
+                        if (_characterAId == null || _characterBId == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('캐릭터를 선택하세요'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+                        if (_characterAId == _characterBId) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('서로 다른 캐릭터를 선택하세요'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+                        _save();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('저장'),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('취소'),
-        ),
-        ElevatedButton(
-          onPressed: _save,
-          child: const Text('저장'),
-        ),
-      ],
     );
   }
 

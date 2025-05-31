@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:chunk_up/domain/models/word.dart';
 import 'package:chunk_up/domain/models/word_list_info.dart';
-import 'package:chunk_up/core/services/subscription_service.dart';
+import 'package:chunk_up/data/services/subscription/subscription_service.dart';
 import 'package:chunk_up/di/service_locator.dart';
 
 class SelectWordsScreen extends StatefulWidget {

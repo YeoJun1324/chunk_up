@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:chunk_up/domain/models/series.dart';
 import 'package:chunk_up/domain/models/character.dart';
-import 'package:chunk_up/core/services/series_service.dart';
-import 'package:chunk_up/core/services/enhanced_character_service.dart';
+import 'package:chunk_up/domain/services/series/series_service.dart';
+import 'package:chunk_up/domain/services/character/enhanced_character_service.dart';
 import 'character_detail_screen.dart';
 import 'character_detail_view.dart';
 import 'relationship_editor_screen.dart';
@@ -26,6 +26,8 @@ class _EnhancedCharacterManagementScreenState extends State<EnhancedCharacterMan
   String? _selectedSeriesId;
   Character? _selectedCharacter;
   bool _isLoading = true;
+  bool _isSelectionMode = false;
+  Set<String> _selectedCharacterIds = {};
 
   @override
   void initState() {
@@ -101,77 +103,197 @@ class _EnhancedCharacterManagementScreenState extends State<EnhancedCharacterMan
   }
 
   Widget _buildSeriesTree() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
       decoration: BoxDecoration(
-        border: Border(
-          right: BorderSide(color: Colors.grey.shade300),
-        ),
+        color: isDarkMode ? Colors.grey.shade900 : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: isDarkMode ? Colors.black54 : Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
+      margin: const EdgeInsets.all(16),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.grey.shade100,
+            decoration: BoxDecoration(
+              color: isDarkMode 
+                  ? Colors.orange.withOpacity(0.15)
+                  : Colors.orange.withOpacity(0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
             child: Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.folder_special,
+                    color: Colors.orange,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     '시리즈 목록',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? Colors.white : null,
+                    ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: _showAddSeriesDialog,
-                  tooltip: '시리즈 추가',
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    onPressed: _showAddSeriesDialog,
+                    tooltip: '시리즈 추가',
+                    iconSize: 20,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: _seriesList.length,
-              itemBuilder: (context, index) {
-                final series = _seriesList[index];
-                final isSelected = series.id == _selectedSeriesId;
-                final characters = _charactersBySeries[series.id] ?? [];
-                
-                return Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    key: PageStorageKey(series.id),
-                    initiallyExpanded: isSelected,
-                    leading: Icon(
-                      Icons.folder,
-                      color: isSelected ? Theme.of(context).primaryColor : null,
-                    ),
-                    title: Text(
-                      series.name,
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Theme.of(context).primaryColor : null,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(12),
+                bottomRight: Radius.circular(12),
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: _seriesList.length,
+                itemBuilder: (context, index) {
+                  final series = _seriesList[index];
+                  final isSelected = series.id == _selectedSeriesId;
+                  final characters = _charactersBySeries[series.id] ?? [];
+                  
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.orange.withOpacity(0.1)
+                          : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade50),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected 
+                            ? Colors.orange.withOpacity(0.5)
+                            : (isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+                        width: isSelected ? 2 : 1,
                       ),
                     ),
-                    subtitle: Text('${characters.length}명의 캐릭터'),
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        dividerColor: Colors.transparent,
+                        colorScheme: Theme.of(context).colorScheme.copyWith(
+                          primary: isDarkMode ? Colors.white70 : null,
+                        ),
+                      ),
+                      child: ExpansionTile(
+                        key: PageStorageKey(series.id),
+                        initiallyExpanded: isSelected,
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        leading: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isSelected 
+                                ? Colors.orange
+                                : (isDarkMode ? Colors.grey.shade700 : Colors.grey.shade200),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: isSelected ? [
+                              BoxShadow(
+                                color: isDarkMode 
+                                    ? Colors.deepPurple.withOpacity(0.4)
+                                    : Theme.of(context).primaryColor.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ] : null,
+                          ),
+                          child: Icon(
+                            Icons.folder,
+                            color: isSelected 
+                                ? Colors.white 
+                                : Colors.orange.shade300,
+                            size: 24,
+                          ),
+                        ),
+                        title: Text(
+                          series.name,
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                            color: isSelected 
+                                ? Colors.orange
+                                : (isDarkMode ? Colors.white70 : null),
+                            fontSize: 16,
+                          ),
+                        ),
+                        subtitle: Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.person_outline,
+                                size: 14,
+                                color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${characters.length}명',
+                                style: TextStyle(
+                                  color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     trailing: PopupMenuButton<String>(
                       itemBuilder: (context) => [
                         PopupMenuItem(
                           value: 'edit',
                           child: Row(
-                            children: [
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
                               Icon(Icons.edit, size: 20),
                               SizedBox(width: 8),
-                              Text('편집'),
+                              Flexible(
+                                child: Text('편집'),
+                              ),
                             ],
                           ),
                         ),
                         PopupMenuItem(
                           value: 'delete',
                           child: Row(
-                            children: [
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
                               Icon(Icons.delete, size: 20, color: Colors.red),
                               SizedBox(width: 8),
-                              Text('삭제', style: TextStyle(color: Colors.red)),
+                              Flexible(
+                                child: Text('삭제', style: TextStyle(color: Colors.red)),
+                              ),
                             ],
                           ),
                         ),
@@ -184,50 +306,205 @@ class _EnhancedCharacterManagementScreenState extends State<EnhancedCharacterMan
                       }
                     },
                     children: [
-                      ...characters.map((character) => ListTile(
-                        contentPadding: const EdgeInsets.only(left: 56, right: 16),
-                        leading: CircleAvatar(
-                          child: Text(character.name[0]),
-                          backgroundColor: _selectedCharacter?.id == character.id
-                              ? Theme.of(context).primaryColor
-                              : Colors.grey.shade400,
+                      ...characters.map((character) {
+                        final isCharacterSelected = _selectedCharacter?.id == character.id;
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isCharacterSelected
+                                ? Colors.orange.withOpacity(0.1)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.only(left: 48, right: 12),
+                            leading: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: isCharacterSelected
+                                    ? Colors.orange
+                                    : (isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+                                shape: BoxShape.circle,
+                                boxShadow: isCharacterSelected ? [
+                                  BoxShadow(
+                                    color: Theme.of(context).primaryColor.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ] : null,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  character.name[0].toUpperCase(),
+                                  style: TextStyle(
+                                    color: isCharacterSelected 
+                                        ? Colors.white 
+                                        : (isDarkMode ? Colors.white70 : Colors.black87),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            title: Text(
+                              character.name,
+                              style: TextStyle(
+                                fontWeight: isCharacterSelected ? FontWeight.w600 : FontWeight.normal,
+                                color: isDarkMode ? Colors.white.withOpacity(0.9) : null,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: character.tags.isNotEmpty 
+                                ? Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    child: Wrap(
+                                      spacing: 4,
+                                      children: character.tags.take(3).map((tag) => Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: isDarkMode 
+                                              ? Colors.grey.shade800 
+                                              : Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          tag,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isDarkMode 
+                                                ? Colors.grey.shade400 
+                                                : Colors.grey.shade700,
+                                          ),
+                                        ),
+                                      )).toList(),
+                                    ),
+                                  )
+                                : null,
+                            trailing: _isSelectionMode
+                                ? Checkbox(
+                                    value: _selectedCharacterIds.contains(character.id),
+                                    activeColor: Colors.orange,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        if (value == true) {
+                                          _selectedCharacterIds.add(character.id);
+                                        } else {
+                                          _selectedCharacterIds.remove(character.id);
+                                        }
+                                      });
+                                    },
+                                  )
+                                : Icon(
+                                    Icons.chevron_right,
+                                    color: isDarkMode ? Colors.grey.shade600 : Colors.grey.shade400,
+                                  ),
+                            onTap: () {
+                              if (_isSelectionMode) {
+                                setState(() {
+                                  if (_selectedCharacterIds.contains(character.id)) {
+                                    _selectedCharacterIds.remove(character.id);
+                                  } else {
+                                    _selectedCharacterIds.add(character.id);
+                                  }
+                                });
+                              } else {
+                                _showEditCharacterDialog(character);
+                              }
+                            },
+                            onLongPress: () {
+                              if (!_isSelectionMode) {
+                                setState(() {
+                                  _isSelectionMode = true;
+                                  _selectedCharacterIds.add(character.id);
+                                });
+                              }
+                            },
+                          ),
+                        );
+                      }),
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _showAddCharacterDialog(series),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.1),
+                                border: Border.all(
+                                  color: Colors.orange.withOpacity(0.3),
+                                  width: 1.5,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.add_circle_outline,
+                                    color: Colors.orange,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    '캐릭터 추가',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                        title: Text(character.name),
-                        subtitle: character.tags.isNotEmpty 
-                            ? Text(
-                                character.tags.join(' · '),
-                                style: const TextStyle(fontSize: 12),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              )
-                            : null,
-                        selected: _selectedCharacter?.id == character.id,
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 20),
-                          color: Colors.red.shade400,
-                          onPressed: () => _confirmDeleteCharacter(character),
-                        ),
-                        onTap: () {
-                          _showEditCharacterDialog(character);
-                        },
-                      )),
-                      ListTile(
-                        contentPadding: const EdgeInsets.only(left: 56, right: 16),
-                        leading: const Icon(Icons.add_circle_outline),
-                        title: const Text('캐릭터 추가'),
-                        onTap: () => _showAddCharacterDialog(series),
                       ),
                       if (characters.length >= 2)
-                        ListTile(
-                          contentPadding: const EdgeInsets.only(left: 56, right: 16),
-                          leading: const Icon(Icons.people_outline),
-                          title: const Text('관계 설정'),
-                          onTap: () => _showRelationshipEditor(series),
+                        Container(
+                          margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => _showRelationshipEditor(series),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.1),
+                                  border: Border.all(
+                                    color: Colors.orange.withOpacity(0.3),
+                                    width: 1.5,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.people_outline,
+                                      color: Colors.orange,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '관계 설정',
+                                      style: TextStyle(
+                                        color: Colors.orange,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                     ],
-                  ),
-                );
-              },
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -266,23 +543,34 @@ class _EnhancedCharacterManagementScreenState extends State<EnhancedCharacterMan
   }
 
   void _showEditCharacterDialog(Character character) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CharacterDetailScreen(
-          character: character,
-          seriesId: character.seriesId,
-          seriesName: character.seriesName,
-          onSave: (updatedCharacter) async {
-            await _characterService.saveCharacter(updatedCharacter);
-            await _loadData();
-            setState(() {
-              _selectedCharacter = updatedCharacter;
-            });
-          },
+    debugPrint('=== Showing edit dialog for character: ${character.name} ===');
+    debugPrint('Character ID: ${character.id}');
+    debugPrint('Series ID: ${character.seriesId}');
+    debugPrint('Series Name: ${character.seriesName}');
+    debugPrint('Tags: ${character.tags}');
+    
+    try {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CharacterDetailScreen(
+            character: character,
+            seriesId: character.seriesId,
+            seriesName: character.seriesName,
+            onSave: (updatedCharacter) async {
+              await _characterService.saveCharacter(updatedCharacter);
+              await _loadData();
+              setState(() {
+                _selectedCharacter = updatedCharacter;
+              });
+            },
+          ),
         ),
-      ),
-    );
+      );
+    } catch (error, stackTrace) {
+      debugPrint('❌ Navigation error: $error');
+      debugPrint('Stack trace: $stackTrace');
+    }
   }
 
   void _showRelationshipEditor(Series series) {
@@ -372,22 +660,98 @@ class _EnhancedCharacterManagementScreenState extends State<EnhancedCharacterMan
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('캐릭터 관리'),
+  void _confirmDeleteSelectedCharacters() async {
+    final count = _selectedCharacterIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('캐릭터 삭제'),
+        content: Text('선택한 $count개의 캐릭터를 삭제하시겠습니까?'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-            tooltip: '새로고침',
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildSeriesTree(),
+    );
+    
+    if (confirmed == true) {
+      for (final characterId in _selectedCharacterIds) {
+        final character = _charactersBySeries.values
+            .expand((chars) => chars)
+            .firstWhere((c) => c.id == characterId);
+        await _characterService.deleteCharacter(character.id);
+        await _seriesService.removeCharacterFromSeries(character.seriesId, character.id);
+      }
+      await _loadData();
+      setState(() {
+        _isSelectionMode = false;
+        _selectedCharacterIds.clear();
+        _selectedCharacter = null;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isSelectionMode) {
+          setState(() {
+            _isSelectionMode = false;
+            _selectedCharacterIds.clear();
+          });
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_isSelectionMode 
+              ? '${_selectedCharacterIds.length}개 선택' 
+              : '캐릭터 관리'),
+          leading: _isSelectionMode
+              ? IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    setState(() {
+                      _isSelectionMode = false;
+                      _selectedCharacterIds.clear();
+                    });
+                  },
+                )
+              : null,
+          actions: [
+            if (_isSelectionMode)
+              IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: _selectedCharacterIds.isNotEmpty
+                    ? () => _confirmDeleteSelectedCharacters()
+                    : null,
+                tooltip: '선택한 캐릭터 삭제',
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadData,
+                tooltip: '새로고침',
+              ),
+          ],
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Container(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey.shade900
+                    : Colors.grey[50],
+                child: _buildSeriesTree(),
+              ),
+      ),
     );
   }
 }

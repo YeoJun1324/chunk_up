@@ -6,7 +6,7 @@ class ErrorMessages {
   static const String apiRequestFailed = 'API 요청 실패';
   static const String apiTimeout = 'API 요청 시간이 초과되었습니다.';
   static const String networkError = '인터넷 연결을 확인해주세요.';
-  static const String unexpectedApiResponse = 'Unexpected API response structure';
+  static const String unexpectedApiResponse = '예상치 못한 API 응답 형식입니다.';
 
   // 검증 에러 메시지
   static const String selectWordListFirst = '단어장을 먼저 선택하세요.';

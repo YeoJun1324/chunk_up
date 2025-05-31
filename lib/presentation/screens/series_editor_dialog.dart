@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:chunk_up/domain/models/series.dart';
 import 'package:uuid/uuid.dart';
+import '../widgets/labeled_border_container.dart';
 
 class SeriesEditorDialog extends StatefulWidget {
   final Series? series;
@@ -66,72 +67,136 @@ class _SeriesEditorDialogState extends State<SeriesEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.series == null ? '시리즈 추가' : '시리즈 편집'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: '시리즈 이름',
-                  hintText: '예: 역전재판',
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return '시리즈 이름을 입력하세요';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: '시리즈 설명',
-                  hintText: '시리즈에 대한 간단한 설명',
-                ),
-                maxLines: 2,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return '시리즈 설명을 입력하세요';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _genreController,
-                decoration: const InputDecoration(
-                  labelText: '장르 (선택사항)',
-                  hintText: '예: 법정 드라마, SF 스릴러',
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
                 ),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _worldSettingController,
-                decoration: const InputDecoration(
-                  labelText: '세계관 (선택사항)',
-                  hintText: '예: 현대 일본, 미래 도시',
+              child: Row(
+                children: [
+                  Icon(
+                    widget.series == null ? Icons.add_circle : Icons.edit,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    widget.series == null ? '시리즈 추가' : '시리즈 편집',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LabeledTextField(
+                        label: '시리즈 이름',
+                        hint: '예: 셜록 홈즈',
+                        isRequired: true,
+                        controller: _nameController,
+                        focusedBorderColor: Theme.of(context).primaryColor,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return '시리즈 이름을 입력하세요';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 4),
+                      LabeledTextField(
+                        label: '시리즈 설명',
+                        hint: '시리즈에 대한 간단한 설명',
+                        isRequired: true,
+                        controller: _descriptionController,
+                        maxLines: 3,
+                        focusedBorderColor: Theme.of(context).primaryColor,
+                        textAlign: TextAlign.justify,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return '시리즈 설명을 입력하세요';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 4),
+                      LabeledTextField(
+                        label: '장르',
+                        hint: '예: 추리, SF, 판타지',
+                        controller: _genreController,
+                        focusedBorderColor: Theme.of(context).primaryColor,
+                      ),
+                      const SizedBox(height: 4),
+                      LabeledTextField(
+                        label: '세계관',
+                        hint: '예: 19세기 런던, 현대 도시',
+                        controller: _worldSettingController,
+                        focusedBorderColor: Theme.of(context).primaryColor,
+                        textAlign: TextAlign.justify,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+            // Actions
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.grey.shade300),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: const Text('취소'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('저장'),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('취소'),
-        ),
-        ElevatedButton(
-          onPressed: _save,
-          child: const Text('저장'),
-        ),
-      ],
     );
   }
 }

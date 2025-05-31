@@ -1,8 +1,9 @@
 // lib/core/utils/api_test.dart
 import 'package:flutter/material.dart';
 import 'api_key_tester.dart';
-import 'package:chunk_up/core/services/api_service.dart';
-import 'package:chunk_up/core/services/embedded_api_service.dart';
+import 'package:chunk_up/domain/services/api_service_interface.dart';
+import 'package:get_it/get_it.dart';
+import 'package:chunk_up/data/services/api/unified_api_service.dart';
 
 /// API 키 테스트 유틸리티
 class ApiTest {
@@ -32,8 +33,9 @@ class ApiTest {
     
     // 2. API 서비스에서 키 가져와서 테스트
     debugPrint('🧪 API 서비스에서 API 키 가져오는 중...');
-    final apiService = ApiService();
-    final apiServiceKey = await apiService.apiKey;
+    try {
+      final apiService = GetIt.instance<ApiServiceInterface>();
+      final apiServiceKey = await apiService.getApiKey();
     
     if (apiServiceKey != null && apiServiceKey.isNotEmpty) {
       debugPrint('🧪 API 서비스의 API 키 테스트 중...');
@@ -49,29 +51,33 @@ class ApiTest {
         failCount++;
       }
     } else {
-      debugPrint('⚠️ API 서비스에서 API 키를 가져오지 못함');
+        debugPrint('⚠️ API 서비스에서 API 키를 가져오지 못함');
+        failCount++;
+      }
+    } catch (e) {
+      debugPrint('⚠️ API 서비스 접근 실패: $e');
       failCount++;
     }
     
-    // 3. EmbeddedApiService에서 키 가져와서 테스트
-    debugPrint('🧪 내장된 API 서비스에서 API 키 가져오는 중...');
-    final embeddedKey = await EmbeddedApiService.getApiKey();
+    // 3. UnifiedApiService에서 키 가져와서 테스트
+    debugPrint('🧪 통합 API 서비스에서 API 키 가져오는 중...');
+    final embeddedKey = await UnifiedApiService.getEmbeddedApiKey();
     
     if (embeddedKey != null && embeddedKey.isNotEmpty) {
-      debugPrint('🧪 내장된 API 서비스의 API 키 테스트 중...');
+      debugPrint('🧪 통합 API 서비스의 API 키 테스트 중...');
       final embeddedKeyResult = await ApiKeyTester.testApiKey(embeddedKey);
       if (embeddedKeyResult['success'] == true) {
-        debugPrint('✅ 내장된 API 서비스의 API 키 테스트 성공');
+        debugPrint('✅ 통합 API 서비스의 API 키 테스트 성공');
         successCount++;
       } else {
-        debugPrint('❌ 내장된 API 서비스의 API 키 테스트 실패: ${embeddedKeyResult['error']}');
+        debugPrint('❌ 통합 API 서비스의 API 키 테스트 실패: ${embeddedKeyResult['error']}');
         if (embeddedKeyResult['status_code'] != null) {
           debugPrint('📋 상태 코드: ${embeddedKeyResult['status_code']}');
         }
         failCount++;
       }
     } else {
-      debugPrint('⚠️ 내장된 API 서비스에서 API 키를 가져오지 못함');
+      debugPrint('⚠️ 통합 API 서비스에서 API 키를 가져오지 못함');
       failCount++;
     }
     

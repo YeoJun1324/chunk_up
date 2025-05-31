@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:chunk_up/domain/models/character.dart';
 import 'package:chunk_up/domain/models/series.dart';
-import 'package:chunk_up/core/services/enhanced_character_service.dart';
-import 'package:chunk_up/core/services/series_service.dart';
+import 'package:chunk_up/domain/services/character/enhanced_character_service.dart';
+import 'package:chunk_up/domain/services/series/series_service.dart';
 
 class CharacterSelectionModal extends StatefulWidget {
   final List<String> initialSelection;

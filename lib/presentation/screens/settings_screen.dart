@@ -4,17 +4,17 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chunk_up/presentation/providers/word_list_notifier.dart';
 import 'package:chunk_up/presentation/providers/theme_notifier.dart'; // 테마 관리 프로바이더 추가
-import 'package:chunk_up/data/datasources/remote/api_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chunk_up/core/theme/app_theme.dart'; // 앱 테마 정의 추가
-import 'package:chunk_up/core/services/subscription_service.dart'; // 구독 서비스 추가
+import 'package:chunk_up/core/theme/app_colors.dart';
+import 'package:chunk_up/data/services/subscription/subscription_service.dart'; // 구독 서비스 추가
+import 'package:chunk_up/data/services/auth/auth_service_extended.dart'; // Firebase 인증 서비스 추가
 import 'package:chunk_up/di/service_locator.dart'; // 서비스 로케이터 추가
+import 'package:get_it/get_it.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'import_screen.dart';
 import 'help_screen.dart';
-import 'legal_info_screen.dart';
-import 'privacy_policy_screen.dart';
-import 'terms_of_service_screen.dart';
 import 'enhanced_character_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -37,6 +37,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _remainingFreeCredits = 0;
   late final SubscriptionService _subscriptionService;
 
+  // Authentication
+  AuthServiceExtended? _authService;
+  User? _currentUser;
+
   // App info
   String _appVersion = '';
   final String _developerEmail = 'chunk_up@naver.com';
@@ -47,9 +51,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _subscriptionService = SubscriptionService();
+    _initializeAuthService();
     _loadSettings();
     _loadAppInfo();
     _loadSubscriptionInfo();
+  }
+
+  void _initializeAuthService() {
+    try {
+      if (GetIt.instance.isRegistered<AuthServiceExtended>()) {
+        _authService = GetIt.instance<AuthServiceExtended>();
+        _currentUser = _authService!.currentUser;
+        
+        // 인증 상태 변화 감지
+        _authService!.authStateChanges.listen((User? user) {
+          if (mounted) {
+            setState(() {
+              _currentUser = user;
+            });
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ AuthService 초기화 실패: $e');
+    }
   }
 
   void _loadSubscriptionInfo() {
@@ -102,48 +127,269 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  // Authentication methods
+  Future<void> _signInWithGoogle() async {
+    if (_authService == null) return;
+    
+    try {
+      final userCredential = await _authService!.signInWithGoogle();
+      if (userCredential != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('구글 로그인 성공'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('로그인 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _signOut() async {
+    if (_authService == null) return;
+    
+    try {
+      await _authService!.signOut();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('로그아웃 되었습니다'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('로그아웃 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
 
   Future<void> _showResetConfirmationDialog() async {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('모든 데이터 초기화'),
-          content: const SingleChildScrollView(
-            child: ListBody(
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.grey[900] : Colors.white,
+              shape: BoxShape.rectangle,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 10.0,
+                  offset: Offset(0.0, 10.0),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text('정말로 모든 데이터를 초기화하시겠습니까?'),
-                Text('이 작업은 되돌릴 수 없으며, 모든 단어장과 단락 데이터가 삭제됩니다.'),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.red,
+                    size: 48,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '모든 데이터 초기화',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '정말로 모든 데이터를 초기화하시겠습니까?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.red.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline,
+                            color: Colors.red[700],
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '모든 단어장과 단어가 삭제됩니다',
+                              style: TextStyle(
+                                color: Colors.red[700],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.article_outlined,
+                            color: Colors.red[700],
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '생성된 모든 단락이 삭제됩니다',
+                              style: TextStyle(
+                                color: Colors.red[700],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.restore_outlined,
+                            color: Colors.red[700],
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '이 작업은 되돌릴 수 없습니다',
+                              style: TextStyle(
+                                color: Colors.red[700],
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: isDarkMode ? Colors.grey[600]! : Colors.grey[300]!,
+                            ),
+                          ),
+                        ),
+                        child: const Text(
+                          '취소',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          await _resetAllData();
+                          if (mounted) {
+                            Navigator.of(context).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle,
+                                      color: Colors.white,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('모든 데이터가 초기화되었습니다'),
+                                  ],
+                                ),
+                                backgroundColor: Colors.red[600],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          '초기화',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('취소'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text(
-                '초기화',
-                style: TextStyle(color: Colors.red),
-              ),
-              onPressed: () async {
-                await _resetAllData();
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('모든 데이터가 초기화되었습니다.'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
         );
       },
     );
@@ -393,8 +639,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('설정'),
-        backgroundColor: isDarkMode ? AppTheme.darkBackground : null,
+        title: const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('설정'),
+        ),
+        backgroundColor: isDarkMode ? AppColors.backgroundDark : null,
       ),
       body: SafeArea(
         child: ListView(
@@ -410,25 +659,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   child: Column(
                     children: [
+                      // 사용자 프로필 이미지
                       CircleAvatar(
                         radius: 40,
                         backgroundColor: Colors.orange.shade200,
-                        child: const Icon(
-                          Icons.person,
-                          size: 40,
-                          color: Colors.white,
-                        ),
+                        backgroundImage: _currentUser?.photoURL != null 
+                          ? NetworkImage(_currentUser!.photoURL!) 
+                          : null,
+                        child: _currentUser?.photoURL == null 
+                          ? const Icon(
+                              Icons.person,
+                              size: 40,
+                              color: Colors.white,
+                            )
+                          : null,
                       ),
                       const SizedBox(height: 16),
+                      
+                      // 사용자 이름 또는 이메일
                       Text(
-                        '게스트 사용자',
+                        _currentUser?.displayName ?? _currentUser?.email ?? '게스트 사용자',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: isDarkMode ? Colors.white : Colors.black87,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      
+                      // 로그인 상태 표시
+                      if (_currentUser != null)
+                        Text(
+                          _currentUser!.email ?? '',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode ? Colors.white70 : Colors.grey.shade600,
+                          ),
+                        ),
+                      
+                      const SizedBox(height: 8),
+                      
                       // Premium 뱃지 (프리미엄 사용자만)
                       if (_isPremium)
                         Container(
@@ -460,20 +729,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
 
-                      // 간격 추가
                       const SizedBox(height: 8),
 
-                      // 모든 사용자에게 구독 관리 버튼 표시
+                      // 구독 관리 버튼
                       ElevatedButton(
                         onPressed: () {
                           Navigator.pushNamed(context, '/subscription');
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange, // 모든 사용자에게 주황색으로 통일
+                          backgroundColor: Colors.orange,
                           foregroundColor: Colors.white,
                         ),
                         child: const Text('구독 관리'),
                       ),
+                      
                       if (!_isPremium)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
@@ -540,6 +809,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               secondary: const Icon(Icons.dark_mode),
             ),
+
+            // 계정 관리
+            const Divider(),
+            const ListTile(
+              title: Text(
+                '계정 관리',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            
+            // 로그인/로그아웃 관련 UI
+            if (_currentUser == null)
+              ListTile(
+                title: const Text('구글로 로그인'),
+                subtitle: const Text('데이터를 안전하게 백업하고 동기화하세요'),
+                leading: const Icon(Icons.login),
+                onTap: _signInWithGoogle,
+              )
+            else
+              Column(
+                children: [
+                  ListTile(
+                    title: Text(_currentUser!.displayName ?? '사용자'),
+                    subtitle: Text(_currentUser!.email ?? ''),
+                    leading: CircleAvatar(
+                      backgroundImage: _currentUser!.photoURL != null 
+                        ? NetworkImage(_currentUser!.photoURL!) 
+                        : null,
+                      child: _currentUser!.photoURL == null 
+                        ? const Icon(Icons.person) 
+                        : null,
+                    ),
+                  ),
+                  ListTile(
+                    title: const Text('로그아웃'),
+                    subtitle: const Text('계정에서 로그아웃합니다'),
+                    leading: const Icon(Icons.logout, color: Colors.red),
+                    onTap: _signOut,
+                  ),
+                ],
+              ),
 
             // 복습 관련 설정
             const Divider(),
@@ -672,18 +985,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             ListTile(
-              title: const Text('앱 사용 설명서'),
-              leading: const Icon(Icons.help_outline),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const HelpScreen(),
-                  ),
-                );
-              },
-            ),
-            ListTile(
               title: const Text('앱 버전'),
               subtitle: Text(_appVersion),
               leading: const Icon(Icons.info_outline),
@@ -692,19 +993,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('개발자에게 문의하기'),
               leading: const Icon(Icons.email_outlined),
               onTap: _launchEmail,
-            ),
-            ListTile(
-              title: const Text('이용약관'),
-              subtitle: const Text('이용약관 및 개인정보처리방침'),
-              leading: const Icon(Icons.assignment_outlined),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const LegalInfoScreen(),
-                  ),
-                );
-              },
             ),
 
             // Credits and acknowledgments
@@ -715,29 +1003,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    'Powered by',
-                    style: TextStyle(
-                      color: Colors.grey,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Claude 3.7 Sonnet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Anthropic',
-                    style: TextStyle(
-                      color: Colors.grey,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    '© 2025 ChunkUp. All rights reserved.',
+                    '© 2025 ChunkUp All rights reserved.',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey,

@@ -2,24 +2,31 @@
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 
-// Core
-import 'package:chunk_up/core/services/network_service.dart';
-import 'package:chunk_up/core/services/logging_service.dart';
-import 'package:chunk_up/core/services/error_service.dart';
-import 'package:chunk_up/core/services/enhanced_character_service.dart';
-import 'package:chunk_up/core/services/cache_service.dart';
-import 'package:chunk_up/core/services/subscription_service.dart';
-import 'package:chunk_up/core/services/ad_service.dart';
-import 'package:chunk_up/core/services/auth_service.dart';
-import 'package:chunk_up/core/services/backup_service.dart';
-import 'package:chunk_up/core/services/prompt_builder_service.dart';
-import 'package:chunk_up/core/services/prompt_template_service.dart';
+// Core - Unified Services
+import 'package:chunk_up/infrastructure/network/network_service.dart';
+import 'package:chunk_up/infrastructure/logging/logging_service.dart';
+import 'package:chunk_up/infrastructure/error/error_service.dart';
+import 'package:chunk_up/domain/services/character/enhanced_character_service.dart';
+import 'package:chunk_up/data/services/cache/cache_service.dart';
+import 'package:chunk_up/data/services/subscription/subscription_service.dart';
+import 'package:chunk_up/data/services/ads/ad_service.dart';
+import 'package:chunk_up/data/services/auth/auth_service.dart';
+import 'package:chunk_up/data/services/backup/backup_service.dart';
+import 'package:chunk_up/domain/services/prompt/prompt_builder_service.dart';
+import 'package:chunk_up/domain/services/prompt/prompt_template_service.dart';
+import 'package:chunk_up/domain/services/exam/unified_exam_generator.dart';
+import 'package:chunk_up/domain/services/content/response_parser_service.dart';
+
+// New Unified Services
+import 'package:chunk_up/data/services/api/unified_api_service.dart';
+import 'package:chunk_up/domain/services/sentence/unified_sentence_mapping_service.dart';
+import 'package:chunk_up/data/services/pdf/pdf_coordinator.dart';
 
 // Data
 import 'package:chunk_up/data/repositories/word_list_repository.dart';
 import 'package:chunk_up/data/repositories/chunk_repository.dart';
 import 'package:chunk_up/data/services/storage/local_storage_service.dart';
-import 'package:chunk_up/data/services/api_service_impl.dart';
+// Legacy API service import removed - using unified API service
 
 // Domain
 import 'package:chunk_up/domain/repositories/word_list_repository_interface.dart';
@@ -64,12 +71,19 @@ Future<void> setupServiceLocator({Environment environment = Environment.producti
     storageService: getIt<StorageService>(),
   ));
   
-  // API 서비스 - 인터페이스와 구현체
-  getIt.registerLazySingleton<ApiServiceInterface>(() => ApiServiceImpl(
+  // API 서비스 - 통합된 API 서비스
+  getIt.registerLazySingleton<ApiServiceInterface>(() => UnifiedApiService(
     httpClient: getIt<http.Client>(),
     networkService: getIt<NetworkService>(),
     cacheService: getIt<CacheService>(),
   ));
+  
+  // 기존 API 서비스 구현체도 호환성을 위해 유지 (deprecated)
+  getIt.registerLazySingleton(() => UnifiedApiService(
+    httpClient: getIt<http.Client>(),
+    networkService: getIt<NetworkService>(),
+    cacheService: getIt<CacheService>(),
+  ), instanceName: 'legacy');
   
   getIt.registerLazySingleton(() => EnhancedCharacterService());
 
@@ -96,6 +110,22 @@ Future<void> setupServiceLocator({Environment environment = Environment.producti
   // Prompt Services
   getIt.registerLazySingleton<PromptBuilderService>(() => PromptBuilderService());
   getIt.registerLazySingleton<PromptTemplateService>(() => PromptTemplateService());
+  
+  // Response Parser Service
+  getIt.registerLazySingleton<ResponseParserService>(() => ResponseParserService());
+
+  // Unified Services - 새로운 통합 서비스들
+  getIt.registerLazySingleton<UnifiedSentenceMappingService>(() => UnifiedSentenceMappingService());
+  getIt.registerLazySingleton<PdfCoordinator>(() => PdfCoordinator(getIt<SubscriptionService>()));
+
+  // 기존 서비스들도 호환성을 위해 유지 (deprecated)
+  // getIt.registerLazySingleton(() => SentenceMappingService(), instanceName: 'legacy');
+  // getIt.registerLazySingleton(() => ExamPdfService(), instanceName: 'legacy');
+
+  // Exam Services (Premium 전용)
+  getIt.registerLazySingleton<UnifiedExamGenerator>(() => UnifiedExamGenerator(
+    config: ExamGenerationConfig.premium,
+  ));
 
   // Repositories
   getIt.registerLazySingleton<WordListRepositoryInterface>(() => WordListRepositoryImpl());
@@ -112,6 +142,11 @@ Future<void> setupServiceLocator({Environment environment = Environment.producti
     chunkRepository: getIt<ChunkRepositoryInterface>(),
     wordListRepository: getIt<WordListRepositoryInterface>(),
     apiService: getIt<ApiServiceInterface>(),
+    characterService: getIt<EnhancedCharacterService>(),
+    promptBuilder: getIt<PromptBuilderService>(),
+    templateService: getIt<PromptTemplateService>(),
+    subscriptionService: getIt<SubscriptionService>(),
+    responseParser: getIt<ResponseParserService>(),
   ));
 
   // Providers

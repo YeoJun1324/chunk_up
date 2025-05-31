@@ -7,7 +7,8 @@ import 'package:chunk_up/presentation/providers/theme_notifier.dart';
 import 'package:chunk_up/domain/models/chunk.dart';
 import 'package:chunk_up/domain/models/word.dart';
 import 'package:chunk_up/core/theme/app_theme.dart';
-import 'package:chunk_up/core/services/route_service.dart';
+import 'package:chunk_up/core/theme/app_colors.dart';
+import 'package:chunk_up/infrastructure/navigation/route_service.dart';
 import 'package:chunk_up/core/config/app_config.dart';
 import 'package:chunk_up/core/config/feature_flags.dart';
 import 'package:chunk_up/presentation/widgets/debug_panel.dart'; // 디버그 패널 추가
@@ -51,10 +52,10 @@ class HomeScreen extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Chunk Up'),
-            backgroundColor: Theme.of(context).brightness == Brightness.dark
-                ? AppTheme.darkBackground
-                : null,
+            title: const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Chunk Up'),
+            ),
             actions: [
               // 다크 모드 토글 버튼
               Consumer<ThemeNotifier>(
@@ -104,7 +105,9 @@ class HomeScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.orange.shade300, Colors.orange.shade600],
+                      colors: Theme.of(context).brightness == Brightness.dark
+                          ? [AppColors.primaryDark, AppColors.primaryDark.withOpacity(0.8)]
+                          : [AppColors.primaryDark, AppColors.primaryDark.withOpacity(0.9)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -117,21 +120,21 @@ class HomeScreen extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: Colors.white.withOpacity(0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Icon(
                               Icons.auto_awesome,
-                              color: Colors.orange,
+                              color: Colors.white,
                               size: 32,
                             ),
                           ),
                           const SizedBox(width: 16),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
+                                const Text(
                                   'Chunk Up',
                                   style: TextStyle(
                                     fontSize: 24,
@@ -142,7 +145,7 @@ class HomeScreen extends StatelessWidget {
                                 Text(
                                   '단어를 문맥으로 배우는 새로운 방법',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: Colors.white.withOpacity(0.9),
                                   ),
                                 ),
                               ],
@@ -153,6 +156,7 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+
 
                 // 학습 버튼 추가
                 Padding(
@@ -302,7 +306,9 @@ class HomeScreen extends StatelessWidget {
                         height: 10,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? AppColors.dividerDark
+                              : AppColors.dividerLight,
                           borderRadius: BorderRadius.circular(5),
                         ),
                         child: FractionallySizedBox(
@@ -310,7 +316,7 @@ class HomeScreen extends StatelessWidget {
                           alignment: Alignment.centerLeft,
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.orange,
+                              color: AppColors.primary(context),
                               borderRadius: BorderRadius.circular(5),
                             ),
                           ),
@@ -332,9 +338,12 @@ class HomeScreen extends StatelessWidget {
                         label: const Text('학습하기'),
                         onPressed: () => _navigateToLearningSelection(context),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
+                          backgroundColor: AppColors.primary(context),
                           foregroundColor: Colors.white,
                           minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
 
@@ -408,12 +417,8 @@ class HomeScreen extends StatelessWidget {
                                 icon: const Icon(Icons.add),
                                 label: const Text('첫 단락 생성하기'),
                                 onPressed: () {
-                                  // Navigate to bottom tab for chunk creation
-                                  Navigator.pushReplacementNamed(context, '/');
-                                  // 약간의 딜레이 후 탭 변경
-                                  Future.delayed(const Duration(milliseconds: 100), () {
-                                    MainScreen.navigateToTab(2);
-                                  });
+                                  // Navigate to chunk creation screen directly
+                                  Navigator.pushNamed(context, '/create-chunk');
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.orange,
@@ -525,12 +530,8 @@ class HomeScreen extends StatelessWidget {
                               icon: const Icon(Icons.add),
                               label: const Text('새 단락 생성하기'),
                               onPressed: () {
-                                // Navigate to bottom tab for chunk creation
-                                Navigator.pushReplacementNamed(context, '/');
-                                // 약간의 딜레이 후 탭 변경
-                                Future.delayed(const Duration(milliseconds: 100), () {
-                                  MainScreen.navigateToTab(2);
-                                });
+                                // Navigate to chunk creation screen directly
+                                Navigator.pushNamed(context, '/create-chunk');
                               },
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.orange,
@@ -558,10 +559,7 @@ class HomeScreen extends StatelessWidget {
       Color backgroundColor,
       Color iconColor,
       ) {
-    // 다크 모드 여부 확인
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    // 다크 모드에서는 배경색과 아이콘 색상 조정
     final adjustedBgColor = isDarkMode ? backgroundColor.withOpacity(0.2) : backgroundColor;
     final adjustedIconColor = isDarkMode ? iconColor.withOpacity(0.9) : iconColor;
 
@@ -571,13 +569,19 @@ class HomeScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: adjustedBgColor,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.borderDark
+                : AppColors.borderLight,
+            width: 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
               icon,
-              color: iconColor,
+              color: adjustedIconColor,
               size: 32,
             ),
             const SizedBox(height: 12),
@@ -586,13 +590,16 @@ class HomeScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: iconColor,
+                color: adjustedIconColor,
               ),
             ),
             Text(
               label,
               style: TextStyle(
-                color: iconColor.withOpacity(0.8),
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.textSecondaryDark
+                    : AppColors.textSecondaryLight,
+                fontSize: 14,
               ),
             ),
           ],
@@ -718,5 +725,6 @@ class HomeScreen extends StatelessWidget {
   void _navigateToLearningHistory(BuildContext context) {
     Navigator.pushNamed(context, '/learning_history');
   }
+
 
 }

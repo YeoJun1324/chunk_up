@@ -12,12 +12,17 @@ class FolderNotifier with ChangeNotifier {
   bool _isLoading = true;
 
   FolderNotifier() {
-    _loadFolders();
+    loadFolders();
   }
 
   /// 불변성이 보장된 폴더 목록 반환
   List<Folder> get folders => List.unmodifiable(_folders);
   bool get isLoading => _isLoading;
+
+  /// 폴더 목록 로드 (public 메서드)
+  Future<void> loadFolders() async {
+    await _loadFolders();
+  }
 
   /// 폴더 목록 로드 - 내부 상태 변경
   Future<void> _loadFolders() async {

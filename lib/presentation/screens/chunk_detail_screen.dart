@@ -1,8 +1,9 @@
 // lib/screens/chunk_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:chunk_up/domain/models/chunk.dart';
-import 'package:chunk_up/data/datasources/remote/api_service.dart';
-import 'package:chunk_up/core/services/error_service.dart';
+import 'package:chunk_up/domain/services/api_service_interface.dart';
+import 'package:get_it/get_it.dart';
+import 'package:chunk_up/infrastructure/error/error_service.dart';
 import 'package:chunk_up/core/utils/word_highlighter.dart';
 
 class ChunkDetailScreen extends StatefulWidget {
@@ -19,13 +20,10 @@ class ChunkDetailScreen extends StatefulWidget {
 
 class _ChunkDetailScreenState extends State<ChunkDetailScreen> {
   final ErrorService _errorService = ErrorService();
-  final PageController _pageController = PageController();
-  int _currentPageIndex = 0;
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -121,7 +119,8 @@ class _ChunkDetailScreenState extends State<ChunkDetailScreen> {
         context: context,
         operation: 'generateExplanation',
         action: () async {
-          final String explanation = await ApiService.generateWordExplanation(
+          final apiService = GetIt.instance<ApiServiceInterface>();
+          final String explanation = await apiService.generateWordExplanation(
             word,
             widget.chunk.englishContent,
           );
@@ -149,142 +148,11 @@ class _ChunkDetailScreenState extends State<ChunkDetailScreen> {
     }
   }
 
-  Widget _buildPageViewContent(int pageIndex) {
-    final bool isEnglishPage = pageIndex == 0;
-    final String title = isEnglishPage ? '영어 단락' : '한국어 해석';
-    final String content = isEnglishPage ? widget.chunk.englishContent : widget.chunk.koreanTranslation;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 16.0 + MediaQuery.of(context).padding.bottom),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white
-                  : Colors.orange
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.grey.shade700
-                    : Colors.grey.shade300
-              ),
-              borderRadius: BorderRadius.circular(8.0),
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color(0xFF3A3A3A)
-                  : Colors.white,
-              boxShadow: Theme.of(context).brightness == Brightness.dark
-                  ? []
-                  : [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
-                        spreadRadius: 1,
-                        blurRadius: 3,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-            ),
-            child: isEnglishPage
-                ? WordHighlighter.buildHighlightedText(
-              text: content,
-              highlightWords: widget.chunk.includedWords,
-              highlightColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.orange.shade300
-                  : Colors.orange,
-              onTap: (word) => _showWordExplanation(context, word.toLowerCase()),
-              underlineHighlights: true,
-              textColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white
-                  : Colors.black87,
-              fontSize: 17.5,
-            )
-                : Text(
-              content,
-              style: TextStyle(
-                fontSize: 17,
-                height: 1.6,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.black87
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (isEnglishPage) ...[  
-            _buildWordList(),
-            if (widget.chunk.usedModel != null) ...[  
-              const SizedBox(height: 16),
-              _buildModelInfo(),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
+  // AI 모델 표시 위젯 제거 - 오직 Gemini만 사용
   Widget _buildModelInfo() {
-    String modelName = '';
-    IconData modelIcon = Icons.smart_toy;
-    Color modelColor = Colors.grey;
-    
-    switch (widget.chunk.usedModel) {
-      case 'claude-opus-4-20250514':
-        modelName = 'Claude Opus 4';
-        modelIcon = Icons.star;
-        modelColor = Colors.amber;
-        break;
-      case 'claude-sonnet-4-20250514':
-        modelName = 'Claude Sonnet 4';
-        modelIcon = Icons.auto_awesome;
-        modelColor = Colors.blue;
-        break;
-      case 'claude-3-5-haiku-20241022':
-        modelName = 'Claude 3.5 Haiku';
-        modelIcon = Icons.bolt;
-        modelColor = Colors.green;
-        break;
-      case 'claude-3-haiku-20240307':
-        modelName = 'Claude 3 Haiku';
-        modelIcon = Icons.speed;
-        modelColor = Colors.teal;
-        break;
-      default:
-        modelName = 'AI Model';
-    }
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: modelColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: modelColor.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(modelIcon, size: 16, color: modelColor),
-          const SizedBox(width: 4),
-          Text(
-            modelName,
-            style: TextStyle(
-              fontSize: 12,
-              color: modelColor,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
+    // 모델 정보를 표시하지 않음
+    return const SizedBox.shrink();
   }
 
   Widget _buildWordList() {
@@ -377,73 +245,32 @@ class _ChunkDetailScreenState extends State<ChunkDetailScreen> {
         backgroundColor: Theme.of(context).brightness == Brightness.dark
             ? null // Use default dark theme color
             : Colors.orange, // Use orange background in light mode
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(40.0),
-          child: Builder(
-            builder: (context) {
-              final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: () => _pageController.animateToPage(
-                      0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                      child: Text(
-                        '영어',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: _currentPageIndex == 0 ? FontWeight.bold : FontWeight.normal,
-                          color: _currentPageIndex == 0
-                              ? (isDarkMode ? Colors.orange.shade300 : Colors.white)
-                              : (isDarkMode ? Colors.white70 : Colors.grey.shade300),
-                        ),
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => _pageController.animateToPage(
-                      1,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                      child: Text(
-                        '한국어',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: _currentPageIndex == 1 ? FontWeight.bold : FontWeight.normal,
-                          color: _currentPageIndex == 1
-                              ? (isDarkMode ? Colors.orange.shade300 : Colors.white)
-                              : (isDarkMode ? Colors.white70 : Colors.grey.shade300),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-          ),
-        ),
       ),
       body: Stack(
         children: [
-          PageView(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                _currentPageIndex = index;
-              });
-            },
-            children: [
-              _buildPageViewContent(0), // English page
-              _buildPageViewContent(1), // Korean page
-            ],
+          SingleChildScrollView(
+            child: Column(
+              children: [
+                // 영어 단락
+                _buildContentSection(
+                  '영어 단락 (English Chunk)',
+                  widget.chunk.englishContent,
+                  isEnglish: true,
+                ),
+                // 한국어 해석
+                _buildContentSection(
+                  '한국어 해석 (Korean Translation)',
+                  widget.chunk.koreanTranslation,
+                  isEnglish: false,
+                ),
+                // 단어 목록
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: _buildWordList(),
+                ),
+                // AI 모델 정보 표시 제거 - 오직 Gemini만 사용
+              ],
+            ),
           ),
 
           // Loading overlay
@@ -467,6 +294,75 @@ class _ChunkDetailScreenState extends State<ChunkDetailScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildContentSection(String title, String content, {bool isEnglish = false}) {
+    // ||| 구분자 제거하고 공백 추가
+    final displayContent = content.replaceAll('|||', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    
+    return Card(
+      margin: const EdgeInsets.all(16.0),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isEnglish ? Icons.article : Icons.translate,
+                  color: Colors.orange,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
+            ),
+            const Divider(),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: isEnglish
+                  ? WordHighlighter.buildHighlightedText(
+                      text: displayContent,
+                      highlightWords: widget.chunk.includedWords,
+                      highlightColor: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.orange.shade300
+                          : Colors.orange,
+                      onTap: (word) => _showWordExplanation(context, word.toLowerCase()),
+                      underlineHighlights: true,
+                      textColor: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black87,
+                      fontSize: 17.5,
+                    )
+                  : Text(
+                      displayContent,
+                      textAlign: TextAlign.left,
+                      style: TextStyle(
+                        fontSize: 17,
+                        height: 1.6,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black87,
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

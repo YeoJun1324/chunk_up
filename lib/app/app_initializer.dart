@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chunk_up/di/dependency_injection.dart' as di;
-import 'package:chunk_up/core/services/logging_service.dart';
-import 'package:chunk_up/core/services/error_service.dart';
-import 'package:chunk_up/core/services/enhanced_character_service.dart';
+import 'package:chunk_up/infrastructure/logging/logging_service.dart';
+import 'package:chunk_up/infrastructure/error/error_service.dart';
+import 'package:chunk_up/domain/services/character/enhanced_character_service.dart';
 import 'package:get_it/get_it.dart';
 
 /// Handles app initialization and configuration
@@ -66,14 +66,25 @@ class AppInitializer {
       }
     };
 
-    // Handle errors outside Flutter framework
+    // Handle errors outside Flutter framework  
     PlatformDispatcher.instance.onError = (error, stack) {
       try {
-        final errorService = GetIt.instance<ErrorService>();
-        errorService.handleError(error, stack);
-      } catch (_) {
-        debugPrint('Unhandled error: $error');
-        debugPrint('Stack trace: $stack');
+        // 서비스가 등록되어 있으면 사용
+        if (GetIt.instance.isRegistered<ErrorService>()) {
+          final errorService = GetIt.instance<ErrorService>();
+          errorService.handleError(error, stack);
+        } else if (GetIt.instance.isRegistered<LoggingService>()) {
+          final loggingService = GetIt.instance<LoggingService>();
+          loggingService.logError('Platform error', error: error, stackTrace: stack);
+        } else {
+          debugPrint('Unhandled platform error: $error');
+          if (kDebugMode) {
+            debugPrint('Stack trace: $stack');
+          }
+        }
+      } catch (e) {
+        debugPrint('Error handler failed: $e');
+        debugPrint('Original error: $error');
       }
       return true; // Prevent app crash
     };
@@ -87,13 +98,16 @@ class AppInitializer {
       DeviceOrientation.portraitDown,
     ]);
 
-    // Configure system overlay style
+    // Configure system overlay style (다크모드 고려)
+    final brightness = PlatformDispatcher.instance.platformBrightness;
+    final isDark = brightness == Brightness.dark;
+    
     SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
+      SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor: Colors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: isDark ? Colors.black : Colors.white,
+        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       ),
     );
   }
@@ -106,9 +120,8 @@ class AppInitializer {
     final loggingService = getIt<LoggingService>();
     loggingService.logInfo('App initialization started');
 
-    // Initialize error service
-    final errorService = getIt<ErrorService>();
-    // ErrorService는 별도의 initialize 메소드가 없음
+    // Initialize error service (별도의 initialize 메소드가 없음)
+    getIt<ErrorService>();
 
     // Initialize enhanced character service
     try {

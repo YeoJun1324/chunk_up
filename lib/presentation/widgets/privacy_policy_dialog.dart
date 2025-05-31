@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:chunk_up/presentation/screens/privacy_policy_screen.dart';
 
 class PrivacyPolicyDialog extends StatelessWidget {
   const PrivacyPolicyDialog({Key? key}) : super(key: key);
@@ -29,23 +28,6 @@ class PrivacyPolicyDialog extends StatelessWidget {
             _buildBulletPoint('수집된 데이터는 앱을 삭제하면 함께 삭제됩니다.'),
             _buildBulletPoint('사용자 동의 없이 제3자에게 개인정보를 제공하지 않습니다.'),
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PrivacyPolicyScreen(),
-                  ),
-                );
-              },
-              child: const Text(
-                '전체 개인정보 처리방침 보기',
-                style: TextStyle(
-                  color: Colors.blue,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
           ],
         ),
       ),

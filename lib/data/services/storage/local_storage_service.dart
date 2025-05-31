@@ -25,45 +25,101 @@ abstract class StorageService {
 
 /// Implementation of StorageService using SharedPreferences
 class LocalStorageService implements StorageService {
-  // Singleton pattern
+  // Singleton pattern with cached instance
   static final LocalStorageService _instance = LocalStorageService._internal();
   factory LocalStorageService() => _instance;
   LocalStorageService._internal();
   
+  // Cache SharedPreferences instance
+  SharedPreferences? _prefs;
+  bool _isInitializing = false;
+  
+  /// Get or initialize SharedPreferences instance
+  Future<SharedPreferences> _getPrefs() async {
+    if (_prefs != null) return _prefs!;
+    
+    // Prevent multiple simultaneous initializations
+    if (_isInitializing) {
+      // Wait for initialization to complete
+      while (_isInitializing) {
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
+      return _prefs!;
+    }
+    
+    _isInitializing = true;
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      return _prefs!;
+    } finally {
+      _isInitializing = false;
+    }
+  }
+  
   @override
   Future<String?> getString(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(key);
+    try {
+      final prefs = await _getPrefs();
+      return prefs.getString(key);
+    } catch (e) {
+      print('LocalStorageService: Error getting string for key $key: $e');
+      return null;
+    }
   }
   
   @override
   Future<bool> setString(String key, String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.setString(key, value);
+    try {
+      final prefs = await _getPrefs();
+      return await prefs.setString(key, value);
+    } catch (e) {
+      print('LocalStorageService: Error setting string for key $key: $e');
+      return false;
+    }
   }
   
   @override
   Future<bool> remove(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.remove(key);
+    try {
+      final prefs = await _getPrefs();
+      return await prefs.remove(key);
+    } catch (e) {
+      print('LocalStorageService: Error removing key $key: $e');
+      return false;
+    }
   }
   
   @override
   Future<bool> clear() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.clear();
+    try {
+      final prefs = await _getPrefs();
+      return await prefs.clear();
+    } catch (e) {
+      print('LocalStorageService: Error clearing storage: $e');
+      return false;
+    }
   }
   
   @override
   Future<bool> containsKey(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.containsKey(key);
+    try {
+      final prefs = await _getPrefs();
+      return prefs.containsKey(key);
+    } catch (e) {
+      print('LocalStorageService: Error checking key $key: $e');
+      return false;
+    }
   }
 
   @override
   Future<Set<String>> getKeys() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getKeys();
+    try {
+      final prefs = await _getPrefs();
+      return prefs.getKeys();
+    } catch (e) {
+      print('LocalStorageService: Error getting keys: $e');
+      return <String>{};
+    }
   }
   
   /// Helper method to save an object to storage

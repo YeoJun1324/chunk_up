@@ -73,8 +73,12 @@ class TestManager {
     testWords = List.from(currentChunk.includedWords);
     testWords.shuffle();
 
-    // 단어 위치 찾기 및 빈칸 매핑 생성
-    correctGapMap = _findWordPositionsInText(currentChunk.englishContent, testWords);
+    // ||| 제거하고 단어 위치 찾기 및 빈칸 매핑 생성
+    final cleanContent = currentChunk.englishContent
+        .replaceAll('|||', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    correctGapMap = _findWordPositionsInText(cleanContent, testWords);
 
     // 사용자 응답 및 점수 초기화
     userAnswers = {};
@@ -390,7 +394,16 @@ class TestManager {
 
     // 틀린 단어를 단락별로 정리
     if (detailedIncorrect.isNotEmpty) {
-      incorrectWords[chunks[currentChunkIndex].title] = detailedIncorrect.values.toList();
+      final chunkTitle = chunks[currentChunkIndex].title;
+      
+      // 복합 테스트의 경우 기존 오답에 추가, 아니면 새로 설정
+      if (testType == TestType.mixed && incorrectWords.containsKey(chunkTitle)) {
+        // 기존 오답 목록에 새로운 오답 추가
+        incorrectWords[chunkTitle]!.addAll(detailedIncorrect.values.toList());
+      } else {
+        // 새로운 오답 목록 생성
+        incorrectWords[chunkTitle] = detailedIncorrect.values.toList();
+      }
     }
 
     return result;

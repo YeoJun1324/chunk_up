@@ -1,6 +1,6 @@
 // lib/presentation/widgets/error_dialog.dart
 import 'package:flutter/material.dart';
-import 'package:chunk_up/core/services/error_service.dart';  // ErrorType import
+import 'package:chunk_up/infrastructure/error/error_service.dart';  // ErrorType import
 
 class ErrorDialog extends StatelessWidget {
   final String title;

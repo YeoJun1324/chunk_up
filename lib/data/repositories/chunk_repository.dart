@@ -1,13 +1,13 @@
 // lib/data/repositories/chunk_repository.dart
 import 'package:chunk_up/core/utils/business_exception.dart';
-import 'package:chunk_up/data/repositories/base_repository.dart';
+import 'package:chunk_up/data/repositories/base/unified_base_repository.dart';
 import 'package:chunk_up/domain/models/chunk.dart';
 import 'package:chunk_up/domain/models/word_list_info.dart';
 import 'package:chunk_up/domain/repositories/chunk_repository_interface.dart';
 import 'package:chunk_up/domain/repositories/word_list_repository_interface.dart';
 import 'package:chunk_up/domain/services/api_service_interface.dart';
 
-class ChunkRepositoryImpl extends BaseRepository<Chunk> implements ChunkRepositoryInterface {
+class ChunkRepositoryImpl extends UnifiedBaseRepository<Chunk> implements ChunkRepositoryInterface {
   static const String _storageKey = 'chunks';
   final WordListRepositoryInterface _wordListRepository;
   final ApiServiceInterface _apiService;
@@ -19,6 +19,9 @@ class ChunkRepositoryImpl extends BaseRepository<Chunk> implements ChunkReposito
 
   @override
   String get storageKey => _storageKey;
+
+  @override
+  String getId(Chunk entity) => entity.id;
 
   @override
   Chunk fromJson(Map<String, dynamic> json) => Chunk.fromJson(json);
@@ -109,7 +112,7 @@ class ChunkRepositoryImpl extends BaseRepository<Chunk> implements ChunkReposito
 
     if (index != -1) {
       // Update existing chunk
-      return await update(chunk, (c) => c.id == chunk.id);
+      return await update(chunk);
     } else {
       // Create new chunk
       return await create(chunk);
@@ -118,6 +121,6 @@ class ChunkRepositoryImpl extends BaseRepository<Chunk> implements ChunkReposito
 
   @override
   Future<bool> deleteChunk(String id) async {
-    return await delete((chunk) => chunk.id == id);
+    return await deleteWhere((chunk) => chunk.id == id);
   }
 }

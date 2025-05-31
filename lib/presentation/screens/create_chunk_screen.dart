@@ -6,13 +6,14 @@ import 'package:chunk_up/domain/models/word.dart';
 import 'package:chunk_up/domain/models/word_list_info.dart';
 import 'select_words_screen.dart';
 import 'chunk_result_screen.dart';
-import 'package:chunk_up/core/services/api_service.dart';
-import 'package:chunk_up/core/services/error_service.dart';
-import 'package:chunk_up/core/services/enhanced_character_service.dart';
-import 'package:chunk_up/core/services/subscription_service.dart';
-import 'package:chunk_up/core/services/ad_service.dart';
+import 'package:chunk_up/domain/services/api_service_interface.dart';
+import 'package:chunk_up/infrastructure/error/error_service.dart';
+import 'package:chunk_up/domain/services/character/enhanced_character_service.dart';
+import 'package:chunk_up/data/services/subscription/subscription_service.dart';
+import 'package:chunk_up/data/services/ads/ad_service.dart';
 import 'enhanced_character_management_screen.dart';
 import 'character_selection_modal.dart';
+import 'word_list_selection_modal.dart';
 import 'package:chunk_up/core/utils/business_exception.dart';
 import 'package:chunk_up/domain/usecases/generate_chunk_use_case.dart';
 import 'package:chunk_up/di/service_locator.dart';
@@ -20,22 +21,38 @@ import 'package:chunk_up/core/constants/app_constants.dart';
 import 'package:chunk_up/core/constants/error_messages.dart';
 import 'package:chunk_up/core/constants/subscription_constants.dart';
 import 'package:chunk_up/core/constants/prompt_templates.dart';
+import 'package:chunk_up/core/constants/prompt_config.dart';
 import 'package:chunk_up/presentation/widgets/labeled_border_container.dart';
+import 'package:chunk_up/core/theme/app_colors.dart';
+import 'package:chunk_up/presentation/widgets/app_button.dart';
+import 'package:chunk_up/presentation/widgets/app_card.dart';
+import 'package:chunk_up/presentation/widgets/app_text_field.dart';
+import 'package:chunk_up/core/utils/ui_helpers.dart';
+import 'package:chunk_up/core/constants/character_constants.dart';
+import 'package:chunk_up/data/services/auth/auth_service_extended.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CreateChunkScreen extends StatefulWidget {
-  const CreateChunkScreen({super.key});
+  final List<Word>? preSelectedWords;
+  final String? wordListName;
+  
+  const CreateChunkScreen({
+    super.key,
+    this.preSelectedWords,
+    this.wordListName,
+  });
 
   @override
   State<CreateChunkScreen> createState() => _CreateChunkScreenState();
 }
 
 class _CreateChunkScreenState extends State<CreateChunkScreen> {
-  final ErrorService _errorService = ErrorService();
+  late final ErrorService _errorService;
   WordListInfo? _selectedWordList;
   String? _selectedWordListName;
   List<Word> _selectedWords = [];
   List<String> _selectedCharacters = [];
-  String? _selectedModel; // 선택된 AI 모델
+  // AI 모델 선택 제거 - 오직 Gemini만 사용
   bool _isLoading = false;
   final TextEditingController _scenarioController = TextEditingController();
   final TextEditingController _detailsController = TextEditingController();
@@ -43,6 +60,7 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
   late SubscriptionService _subscriptionService;
   late AdService _adService;
   bool _isCheckingSubscription = true;
+  AuthServiceExtended? _authService;
   
   // 새로운 프롬프트 개선 기능 관련 변수
   OutputFormat? _selectedOutputFormat;
@@ -60,27 +78,51 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
     // getIt을 사용하여 의존성 주입
     _generateChunkUseCase = getIt<GenerateChunkUseCase>();
     _enhancedCharacterService = getIt<EnhancedCharacterService>();
+    _errorService = getIt<ErrorService>();
+    
+    // 전달받은 단어들과 단어장 설정
+    if (widget.preSelectedWords != null && widget.wordListName != null) {
+      _selectedWords = List.from(widget.preSelectedWords!);
+      _selectedWordListName = widget.wordListName;
+      // 나중에 단어장 정보를 가져오기 위해 설정
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _setWordListFromName();
+      });
+    }
+    
     _loadCharacterOptions();
     _initializeServices();
+  }
+  
+  void _setWordListFromName() {
+    if (_selectedWordListName != null) {
+      final wordListNotifier = Provider.of<WordListNotifier>(context, listen: false);
+      try {
+        _selectedWordList = wordListNotifier.wordLists.firstWhere(
+          (list) => list.name == _selectedWordListName,
+        );
+      } catch (e) {
+        debugPrint('단어장을 찾을 수 없습니다: $_selectedWordListName');
+      }
+    }
   }
 
   Future<void> _initializeServices() async {
     try {
-      // 구독 서비스 초기화
-      if (!getIt.isRegistered<SubscriptionService>()) {
-        getIt.registerLazySingleton<SubscriptionService>(() => SubscriptionService());
-      }
+      // DI 컨테이너에서 등록된 서비스들을 가져오기만 함 (등록은 하지 않음)
       _subscriptionService = getIt<SubscriptionService>();
-
-      // 광고 서비스 초기화 - 이미 등록된 인스턴스 확인
-      if (!getIt.isRegistered<AdService>()) {
-        getIt.registerLazySingleton<AdService>(() => AdService());
+      _adService = getIt<AdService>();
+      
+      // 인증 서비스 초기화
+      try {
+        if (getIt.isRegistered<AuthServiceExtended>()) {
+          _authService = getIt<AuthServiceExtended>();
+        }
+      } catch (e) {
+        debugPrint('⚠️ AuthService 초기화 실패: $e');
       }
 
-      // 광고 서비스 인스턴스 가져오기
-      _adService = getIt<AdService>();
-
-      // 광고 서비스가 초기화되지 않았다면 초기화
+      // 광고 서비스 상태 확인 및 초기화
       if (!_adService.isInitialized) {
         await _adService.initialize();
       }
@@ -90,22 +132,13 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
         await _adService.loadInterstitialAd();
       }
       
-      // 구독 상태에 따른 기본 모델 설정
-      if (_selectedModel == null) {
-        final status = _subscriptionService.status;
-        if (status == TestSubscriptionStatus.premium || status == TestSubscriptionStatus.testPremium) {
-          _selectedModel = SubscriptionConstants.premiumAiModel;
-        } else if (status == TestSubscriptionStatus.basic) {
-          _selectedModel = SubscriptionConstants.basicAiModel;
-        } else {
-          _selectedModel = SubscriptionConstants.freeAiModel;
-        }
-        debugPrint('🤖 기본 모델 설정: $_selectedModel (구독 상태: $status)');
-      }
+      // AI 모델 설정 제거 - 오직 Gemini만 사용
 
       debugPrint('✅ 청크 생성 화면: 서비스 초기화 완료');
     } catch (e) {
       debugPrint('❌ 청크 생성 화면: 서비스 초기화 실패: $e');
+      // 서비스 가져오기 실패 시 기본값으로 설정
+      _setFallbackServices();
     } finally {
       if (mounted) {
         setState(() {
@@ -115,10 +148,140 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
     }
   }
 
+  // AI 모델 설정 메서드 제거 - 오직 Gemini만 사용
+
+  void _setFallbackServices() {
+    // 서비스 가져오기 실패 시 기본값 설정
+    debugPrint('⚠️ 서비스 초기화 실패');
+  }
+
+  void _showLoginRequiredDialog() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.grey[900] : Colors.white,
+              shape: BoxShape.rectangle,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 10.0,
+                  offset: Offset(0.0, 10.0),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.login,
+                    color: Colors.orange,
+                    size: 48,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '로그인이 필요합니다',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '청크 생성 기능을 사용하려면\n구글 계정으로 로그인해주세요.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: isDarkMode ? Colors.grey[600]! : Colors.grey[300]!,
+                            ),
+                          ),
+                        ),
+                        child: const Text(
+                          '취소',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          // 설정 화면으로 이동
+                          Navigator.pushNamed(context, '/settings');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          '로그인하기',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _scenarioController.dispose();
     _detailsController.dispose();
+    _timePointController.dispose();
     super.dispose();
   }
 
@@ -136,26 +299,15 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
       final enhancedCharacters = await _enhancedCharacterService.getAllCharacters();
       final List<String> options = enhancedCharacters.map((c) => c.name).toList();
 
-      // 필터링
-      final Set<String> uniqueOptions = {};
-      for (String option in options) {
-        if (option.trim().isNotEmpty &&
-            option != '(캐릭터 없음)' &&
-            option != '캐릭터 없음' &&
-            option != '기본' &&
-            option != '캐릭터 새로 추가...') {
-          uniqueOptions.add(option.trim());
-        }
-      }
-
-      final filteredOptions = uniqueOptions.toList();
+      // 상수를 사용한 필터링
+      final filteredOptions = CharacterConstants.filterCharacterNames(options);
 
       setState(() {
         _characterOptions = filteredOptions;
 
         // 현재 선택된 캐릭터들이 유효한지 확인
         _selectedCharacters = _selectedCharacters.where((character) =>
-            character != '캐릭터 새로 추가...' &&
+            CharacterConstants.isValidCharacterName(character) &&
             _characterOptions.contains(character)
         ).toList();
       });
@@ -226,6 +378,12 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
       operation: 'generateChunk',
       context: context,
       action: () async {
+        // 로그인 체크
+        if (_authService == null || _authService!.currentUser == null) {
+          _showLoginRequiredDialog();
+          return;
+        }
+        
         if (_selectedWordList == null || _selectedWords.isEmpty) {
           throw BusinessException(
             message: '단어장을 선택하고, 생성할 단어를 선택해주세요.',
@@ -278,58 +436,37 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
           debugPrint('💎 구독 사용자 청크 생성 - 광고 없음');
         }
 
-        // 크레딧 차감 처리
-        final creditCost = (_selectedModel == SubscriptionConstants.opusAiModel || 
-                           _selectedModel == SubscriptionConstants.premiumAiModel)
-            ? SubscriptionConstants.opusCreditCost 
-            : SubscriptionConstants.defaultCreditCost;
-        
-        if (!_subscriptionService.isPremium) {
-          final isBasic = _subscriptionService.isBasic;
-          final userType = isBasic ? "Basic" : "무료";
-          debugPrint('💰 $userType 사용자 크레딧 차감 시작... (필요 크레딧: $creditCost)');
-          
-          // Opus 모델은 프리미엄 전용
-          if (_selectedModel == SubscriptionConstants.opusAiModel) {
+        // 생성 가능 여부 확인 및 차감 처리
+        final canGenerate = await _subscriptionService.canGenerateChunk();
+        if (!canGenerate) {
+          if (_subscriptionService.isPremium) {
+            debugPrint('❌ 프리미엄 사용자 크레디트 부족');
             throw BusinessException(
-              message: 'Claude Opus 4 모델은 프리미엄 구독자만 사용할 수 있습니다.',
+              message: '이번 달 크레디트가 모두 소진되었습니다. 다음 달을 기다려주세요.',
               type: BusinessErrorType.validationError,
             );
-          }
-          
-          // Basic 사용자가 Sonnet 4를 선택한 경우 체크
-          if (isBasic && _selectedModel == SubscriptionConstants.premiumAiModel) {
-            debugPrint('💎 Basic 사용자가 Sonnet 4 모델 선택 - 5 크레딧 차감');
-          }
-          
-          // 크레딧 사용 시도
-          final hasCredits = await _subscriptionService.useCredit(count: creditCost);
-          if (!hasCredits) {
-            debugPrint('❌ 크레딧 부족으로 처리 불가');
+          } else {
+            debugPrint('❌ 무료 사용자 평생 생성 횟수 초과');
             throw BusinessException(
-              message: '무료 크레딧이 모두 소진되었습니다. 크레딧을 충전하거나 프리미엄으로 업그레이드하세요.',
-              type: BusinessErrorType.validationError,
-            );
-          }
-          final remainingCredits = _subscriptionService.remainingCredits;
-          debugPrint('💸 무료 크레딧 차감 완료: 남은 개수 $remainingCredits');
-        } else {
-          debugPrint('💎 프리미엄 사용자: 크레딧 소비 $creditCost');
-          
-          // 프리미엄 사용자도 크레딧 차감
-          final hasCredits = await _subscriptionService.useCredit(count: creditCost);
-          if (!hasCredits) {
-            debugPrint('❌ 크레딧 부족으로 처리 불가');
-            throw BusinessException(
-              message: '이번 달 크레딧이 모두 소진되었습니다. 다음 달을 기다려주세요.',
+              message: '평생 무료 생성 횟수(5회)를 모두 사용했습니다. 프리미엄으로 업그레이드하세요.',
               type: BusinessErrorType.validationError,
             );
           }
         }
-
+        
+        // 생성 횟수/크레디트 차감
+        await _subscriptionService.useGeneration();
+        
+        if (_subscriptionService.isPremium) {
+          final remainingCredits = _subscriptionService.remainingCredits;
+          debugPrint('💎 프리미엄 사용자: 1 크레디트 차감 완료 (남은 크레디트: $remainingCredits)');
+        } else {
+          final remainingGenerations = _subscriptionService.remainingGenerations;
+          debugPrint('💸 무료 생성 횟수 차감 완료 (남은 횟수: $remainingGenerations)');
+        }
         // API 서비스 테스트 (디버깅용)
         debugPrint('🔄 청크 생성 전 API 테스트');
-        final apiService = getIt<ApiService>();
+        final apiService = getIt<ApiServiceInterface>();
         final apiTestResult = await apiService.testApiConnection();
         debugPrint('🔌 API 테스트 결과: ${apiTestResult ? "성공" : "실패"}');
 
@@ -363,7 +500,7 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
           character: _selectedCharacters,
           scenario: _scenarioController.text.trim(),
           details: _detailsController.text.trim(),
-          modelOverride: _selectedModel,
+          modelOverride: null, // 모델 선택 제거 - 오직 Gemini만 사용
           outputFormat: _selectedOutputFormat ?? OutputFormat.narrative,
           advancedSettings: advancedSettings,
         );
@@ -455,58 +592,7 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
     );
   }
 
-  List<DropdownMenuItem<String?>> _buildModelItems() {
-    final status = _subscriptionService.status;
-    List<DropdownMenuItem<String?>> modelItems = [];
-    
-    if (status == TestSubscriptionStatus.free) {
-      // 무료 사용자: Haiku만 사용 가능
-      modelItems = [
-        DropdownMenuItem<String?>(
-          value: SubscriptionConstants.freeAiModel,
-          child: Text('Claude 3 Haiku (무료)'),
-        ),
-      ];
-    } else if (status == TestSubscriptionStatus.basic) {
-      // Basic 사용자: 기본 Haiku 3.5 또는 Sonnet 4 선택 가능
-      modelItems = [
-        DropdownMenuItem<String?>(
-          value: SubscriptionConstants.basicAiModel,
-          child: Text('Claude 3.5 Haiku - 1 크레디트 (기본)'),
-        ),
-        DropdownMenuItem<String?>(
-          value: SubscriptionConstants.premiumAiModel,
-          child: Row(
-            children: [
-              Icon(Icons.auto_awesome, color: Colors.blue, size: 16),
-              SizedBox(width: 4),
-              Text('Claude Sonnet 4 - 5 크레디트'),
-            ],
-          ),
-        ),
-      ];
-    } else {
-      // Premium 사용자: 기본 Sonnet 4 또는 Opus 4 선택 가능
-      modelItems = [
-        DropdownMenuItem<String?>(
-          value: SubscriptionConstants.premiumAiModel,
-          child: Text('Claude Sonnet 4 - 1 크레디트 (기본)'),
-        ),
-        DropdownMenuItem<String?>(
-          value: SubscriptionConstants.opusAiModel,
-          child: Row(
-            children: [
-              Icon(Icons.star, color: Colors.amber, size: 16),
-              SizedBox(width: 4),
-              Text('Claude Opus 4 - 5 크레디트'),
-            ],
-          ),
-        ),
-      ];
-    }
-    
-    return modelItems;
-  }
+  // AI 모델 선택 아이템 빌더 제거 - 오직 Gemini만 사용
 
   Widget _buildEmotionalStateChip(EmotionalState emotionalState, String label) {
     final isSelected = _selectedEmotionalState == emotionalState;
@@ -546,7 +632,10 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chunk 생성 설정'),
+        title: const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Chunk 생성 설정'),
+        ),
       ),
       body: SafeArea(
         child: Stack(
@@ -558,32 +647,57 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
                   child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                LabeledDropdown<String?>(
+                LabeledBorderContainer(
                   label: '1. 단어장 선택',
-                  hint: '포함할 단어가 있는 단어장을 선택하세요',
                   isRequired: true,
-                  value: _selectedWordListName,
-                  items: availableWordListsFromProvider.map((WordListInfo list) {
-                    return DropdownMenuItem<String?>(
-                      value: list.name,
-                      child: Text(list.name),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedWordListName = newValue;
-                      if (newValue != null) {
-                        _selectedWordList = availableWordListsFromProvider
-                            .firstWhere((list) => list.name == newValue);
-                      } else {
-                        _selectedWordList = null;
-                      }
-                      _selectedWords = [];
-                    });
-                  },
                   borderColor: Colors.grey.shade300,
                   focusedBorderColor: Colors.orange,
                   labelColor: Colors.black87,
+                  hasValue: _selectedWordList != null,
+                  child: InkWell(
+                    onTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (context) => WordListSelectionModal(
+                          selectedWordListName: _selectedWordListName,
+                          onWordListSelected: (wordList) {
+                            setState(() {
+                              _selectedWordList = wordList;
+                              _selectedWordListName = wordList.name;
+                              _selectedWords = [];
+                            });
+                          },
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _selectedWordListName ?? '단어장을 선택하세요',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _selectedWordListName != null
+                                    ? Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.white
+                                        : Colors.black87
+                                    : Colors.grey.shade400,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.orange,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -632,16 +746,26 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
                       spacing: 8.0,
                       runSpacing: 4.0,
                       children: _selectedWords
-                          .map((word) => Chip(
-                        label: Text(word.english),
+                          .asMap()
+                          .entries
+                          .map((entry) => Chip(
+                        label: Text(entry.value.english),
                         avatar: CircleAvatar(
-                            child: Text(word.english.substring(0,1).toUpperCase())),
+                            backgroundColor: Colors.orange,
+                            child: Text(
+                              '${entry.key + 1}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )),
                         deleteIcon: const Icon(Icons.close, size: 16),
                         onDeleted: (){
                           setState(() {
                             // 불변성 패턴 적용 - 기존 리스트를 직접 수정하지 않고 새 리스트 생성
                             _selectedWords = _selectedWords
-                                .where((w) => w.english != word.english)
+                                .where((w) => w.english != entry.value.english)
                                 .toList();
                           });
                         },
@@ -651,57 +775,11 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
                   ),
                 const SizedBox(height: 24),
 
-                Builder(
-                  builder: (context) {
-                    final List<DropdownMenuItem<String?>> items = [];
-
-                    // null 항목 추가
-                    items.add(const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('캐릭터 없음'),
-                    ));
-
-                    // 캐릭터 옵션 추가
-                    for (String option in _characterOptions) {
-                      items.add(DropdownMenuItem<String?>(
-                        value: option,
-                        child: Text(option),
-                      ));
-                    }
-
-                    // "캐릭터 새로 추가..." 옵션은 마지막에 한 번만 추가
-                    items.add(const DropdownMenuItem<String?>(
-                      value: '캐릭터 새로 추가...',
-                      child: Text('캐릭터 새로 추가...'),
-                    ));
-
-                    // 디버깅을 위해 추가
-                    print('Selected characters: $_selectedCharacters');
-                    print('Available items: ${items.map((e) => e.value).toList()}');
-
-                    return LabeledDropdown<String?>(
-                      key: ValueKey(_selectedCharacters.join(',')), // key 추가
-                      label: '3. AI 모델 선택',
-                      hint: 'AI 모델을 선택하세요',
-                      isRequired: true,
-                      value: _selectedModel,
-                      items: _buildModelItems(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedModel = value;
-                        });
-                      },
-                      borderColor: Colors.grey.shade300,
-                      focusedBorderColor: Colors.orange,
-                      labelColor: Colors.black87,
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
+                // AI 모델 선택 UI 제거 - 오직 Gemini만 사용
                 
                 // 캐릭터 선택 (다중 선택 가능)
                 LabeledBorderContainer(
-                  label: '4. 캐릭터 선택',
+                  label: '3. 캐릭터 선택',
                   isRequired: false,
                   borderColor: Colors.grey.shade300,
                   focusedBorderColor: Colors.orange,
@@ -820,7 +898,7 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
 
                 // 출력 형식 선택 (선택사항)
                 LabeledBorderContainer(
-                  label: '5. 출력 형식 선택 (선택사항)',
+                  label: '4. 출력 형식 선택 (선택사항)',
                   isRequired: false,
                   borderColor: Colors.grey.shade300,
                   focusedBorderColor: Colors.orange,
@@ -845,20 +923,21 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
                 const SizedBox(height: 24),
 
                 LabeledTextField(
-                  label: '6. 시나리오',
+                  label: '5. 시나리오',
                   hint: '예: 셜록 홈즈가 안개 낀 런던 거리에서 단서를 찾고 있다.',
                   controller: _scenarioController,
                   maxLines: 2,
                   borderColor: Colors.grey.shade300,
                   focusedBorderColor: Colors.orange,
                   labelColor: Colors.black87,
+                  textAlign: TextAlign.justify,
                 ),
                 const SizedBox(height: 24),
 
                 // 고급 설정 확장 패널
                 Card(
                   child: ExpansionTile(
-                    title: Text('7. 고급 설정 (선택사항)'),
+                    title: Text('6. 고급 설정 (선택사항)'),
                     leading: Icon(Icons.settings, color: Colors.grey),
                     onExpansionChanged: (expanded) {
                       setState(() {
@@ -874,12 +953,13 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
                             // 시점 입력
                             LabeledTextField(
                               label: '시점',
-                              hint: '예: 첫 번째 루프 후, 마유리가 죽기 직전, 클라이맥스 장면 등',
+                              hint: '예: 도로시가 토네이도 후 깨어났을 때, 에메랄드 시티 도착 직전, 오즈를 만나는 장면 등',
                               controller: _timePointController,
                               maxLines: 1,
                               borderColor: Colors.grey.shade300,
                               focusedBorderColor: Colors.orange,
                               labelColor: Colors.black87,
+                              textAlign: TextAlign.justify,
                             ),
                             const SizedBox(height: 16),
                             
@@ -939,12 +1019,13 @@ class _CreateChunkScreenState extends State<CreateChunkScreen> {
                             
                             LabeledTextField(
                               label: '세부 사항',
-                              hint: '캐릭터 말투, 배경 설정, 원하는 글의 스타일 등 추가 요구사항',
+                              hint: '추가 요구사항을 입력해주세요',
                               controller: _detailsController,
                               maxLines: 3,
                               borderColor: Colors.grey.shade300,
                               focusedBorderColor: Colors.orange,
                               labelColor: Colors.black87,
+                              textAlign: TextAlign.justify,
                             ),
                           ],
                         ),

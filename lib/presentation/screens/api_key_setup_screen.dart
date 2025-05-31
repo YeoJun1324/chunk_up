@@ -1,9 +1,10 @@
 // lib/screens/api_key_setup_screen.dart
 import 'package:flutter/material.dart';
-import 'package:chunk_up/data/datasources/remote/api_service.dart';
-import 'package:chunk_up/core/services/error_service.dart'; // 추가
+import 'package:chunk_up/infrastructure/error/error_service.dart';
 import 'package:chunk_up/di/service_locator.dart';
-import 'package:chunk_up/core/services/api_service.dart' as core_api;
+import 'package:chunk_up/domain/services/api_service_interface.dart';
+import 'package:get_it/get_it.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiKeySetupScreen extends StatefulWidget {
   final bool isInitialSetup;
@@ -43,11 +44,15 @@ class _ApiKeySetupScreenState extends State<ApiKeySetupScreen> {
         operation: 'validateAndSaveApiKey',
         action: () async {
           final apiKey = _apiKeyController.text.trim();
-          await ApiService.validateApiKey(apiKey);
-          await ApiService.saveApiKeyStatic(apiKey);
-
-          // 코어 서비스에도 동일한 키 저장
-          await core_api.ApiService.saveApiKeyStatic(apiKey);
+          final apiService = GetIt.instance<ApiServiceInterface>();
+          
+          // API 키 설정 및 테스트
+          await apiService.setApiKey(apiKey);
+          await apiService.testApiConnection();
+          
+          // 보안 저장소에 저장
+          const storage = FlutterSecureStorage();
+          await storage.write(key: 'anthropic_api_key', value: apiKey);
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

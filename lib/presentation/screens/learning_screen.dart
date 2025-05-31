@@ -7,13 +7,16 @@ import 'package:chunk_up/domain/models/learning_history_entry.dart'; // 불변 �
 import 'package:chunk_up/domain/models/learning_session.dart'; // 불변 모델 추가
 import 'package:chunk_up/domain/models/review_reminder.dart'; // 복습 알림 모델 추가
 import 'package:chunk_up/core/utils/word_highlighter.dart';
-import 'package:chunk_up/core/services/review_service.dart'; // 복습 서비스 추가
+import 'package:chunk_up/domain/services/review/review_service.dart'; // 복습 서비스 추가
 import 'package:chunk_up/di/service_locator.dart'; // 의존성 주입
 import 'package:uuid/uuid.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:pluralize/pluralize.dart';
+import 'package:chunk_up/domain/services/sentence/unified_sentence_mapping_service.dart';
+import 'package:chunk_up/domain/models/sentence_pair.dart';
+import 'package:get_it/get_it.dart';
 
 enum TtsState { playing, stopped, paused }
 
@@ -39,14 +42,17 @@ class _LearningScreenState extends State<LearningScreen> {
   int _currentSentenceIndex = 0;
   List<String> _currentSentences = [];
   List<String> _translatedSentences = [];
+  List<SentencePair> _currentSentencePairs = [];
   TtsState _ttsState = TtsState.stopped;
   bool _isSentenceMode = true;
   final List<Map<String, dynamic>> _learningHistory = [];
   DateTime _startTime = DateTime.now();
+  late final UnifiedSentenceMappingService _sentenceMappingService;
 
   @override
   void initState() {
     super.initState();
+    _sentenceMappingService = GetIt.I<UnifiedSentenceMappingService>();
     _initTts();
     _prepareChunkForLearning();
     _startTime = DateTime.now();
@@ -87,30 +93,38 @@ class _LearningScreenState extends State<LearningScreen> {
 
     final currentChunk = widget.selectedChunks[_currentChunkIndex];
 
-    // 문장 분리 개선 - 약어를 고려한 정규표현식
-    _currentSentences = _splitIntoSentences(currentChunk.englishContent);
+    // Use sentence mapping service to get sentence pairs
+    _currentSentencePairs = _sentenceMappingService.extractSentencePairs(currentChunk);
+    
+    if (_currentSentencePairs.isNotEmpty) {
+      // Extract sentences from pairs
+      _currentSentences = _currentSentencePairs.map((pair) => pair.english).toList();
+      _translatedSentences = _currentSentencePairs.map((pair) => pair.korean).toList();
+    } else {
+      // Fallback to old method if no pairs found
+      _currentSentences = _splitIntoSentences(currentChunk.englishContent);
+      
+      try {
+        _translatedSentences = _splitIntoSentences(currentChunk.koreanTranslation, isKorean: true);
 
-    // 한국어 번역 문장 분리 시도
-    try {
-      _translatedSentences = _splitIntoSentences(currentChunk.koreanTranslation, isKorean: true);
-
-      // 분할된 문장 수가 영어 문장 수와 다를 경우 대체 전략 적용
-      if (_translatedSentences.length != _currentSentences.length) {
-        // 비율에 따라 문장을 매핑
-        if (_translatedSentences.length < _currentSentences.length) {
-          // 한국어 문장이 적으면 마지막 문장을 반복
-          while (_translatedSentences.length < _currentSentences.length) {
-            _translatedSentences.add(_translatedSentences.isNotEmpty ? _translatedSentences.last : "번역 없음");
+        // 분할된 문장 수가 영어 문장 수와 다를 경우 대체 전략 적용
+        if (_translatedSentences.length != _currentSentences.length) {
+          // 비율에 따라 문장을 매핑
+          if (_translatedSentences.length < _currentSentences.length) {
+            // 한국어 문장이 적으면 마지막 문장을 반복
+            while (_translatedSentences.length < _currentSentences.length) {
+              _translatedSentences.add(_translatedSentences.isNotEmpty ? _translatedSentences.last : "번역 없음");
+            }
+          } else if (_translatedSentences.length > _currentSentences.length) {
+            // 한국어 문장이 많으면 앞부분만 사용
+            _translatedSentences = _translatedSentences.sublist(0, _currentSentences.length);
           }
-        } else if (_translatedSentences.length > _currentSentences.length) {
-          // 한국어 문장이 많으면 앞부분만 사용
-          _translatedSentences = _translatedSentences.sublist(0, _currentSentences.length);
         }
+      } catch (e) {
+        // 오류 발생 시 기본 메시지 표시
+        _translatedSentences = List.generate(
+            _currentSentences.length, (_) => "번역 문장 분리 오류");
       }
-    } catch (e) {
-      // 오류 발생 시 기본 메시지 표시
-      _translatedSentences = List.generate(
-          _currentSentences.length, (_) => "번역 문장 분리 오류");
     }
 
     _currentSentenceIndex = 0;
@@ -1009,6 +1023,7 @@ class _LearningScreenState extends State<LearningScreen> {
                             height: 1.4,
                             color: isDarkMode ? Colors.white.withOpacity(0.9) : Colors.black87,
                           ),
+                          textAlign: TextAlign.left,
                         ),
                       ),
                     ],
@@ -1237,6 +1252,7 @@ class _LearningScreenState extends State<LearningScreen> {
                   height: 1.5,
                   color: isDarkMode ? Colors.white : Colors.black87,
                 ),
+                textAlign: TextAlign.left,
               ),
             );
           },
@@ -1315,6 +1331,7 @@ class _LearningScreenState extends State<LearningScreen> {
                   height: 1.5,
                   color: isDarkMode ? Colors.white : Colors.black87,
                 ),
+                textAlign: TextAlign.left,
               ),
             );
           },

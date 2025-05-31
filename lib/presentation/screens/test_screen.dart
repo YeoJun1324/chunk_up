@@ -5,7 +5,7 @@ import 'package:chunk_up/presentation/providers/word_list_notifier.dart';
 import 'package:chunk_up/domain/models/chunk.dart';
 import 'package:chunk_up/core/utils/test_manager.dart';
 import 'package:chunk_up/presentation/widgets/labeled_border_container.dart';
-import 'package:chunk_up/core/services/subscription_service.dart';
+import 'package:chunk_up/data/services/subscription/subscription_service.dart';
 import 'package:get_it/get_it.dart';
 import 'chunk_test_screen.dart';
 
@@ -82,7 +82,10 @@ class _TestScreenState extends State<TestScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('테스트 준비'),
+            title: const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('테스트 준비'),
+        ),
           ),
           body: SafeArea(
             child: SingleChildScrollView(

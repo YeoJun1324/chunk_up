@@ -4,7 +4,6 @@ import 'package:chunk_up/core/constants/subscription_constants.dart';
 /// 구독 플랜 타입 (enum)
 enum SubscriptionType {
   free,
-  basic,
   premium
 }
 
@@ -16,13 +15,16 @@ class SubscriptionPlan {
   final String price;
   final String? discountPrice; // 할인 가격
   final String aiModel;
-  final int generationLimit;
+  final int creditLimit; // 월 크레딧 제한
+  final int generationLimit; // 청크 생성 제한 (무료 사용자)
   final int wordMinLimit;
   final int wordMaxLimit;
   final bool hasAds;
   final bool allowsTest;
   final bool allowsPdfExport;
   final bool allowsCharacterCreation;
+  final bool allowsSeries; // 시리즈 생성/편집 가능 여부
+  final bool allowsModelSelection; // AI 모델 선택 가능 여부
   final String productId;
 
   const SubscriptionPlan({
@@ -32,6 +34,7 @@ class SubscriptionPlan {
     required this.price,
     this.discountPrice,
     required this.aiModel,
+    required this.creditLimit,
     required this.generationLimit,
     required this.wordMinLimit,
     required this.wordMaxLimit,
@@ -39,6 +42,8 @@ class SubscriptionPlan {
     required this.allowsTest,
     required this.allowsPdfExport,
     required this.allowsCharacterCreation,
+    required this.allowsSeries,
+    required this.allowsModelSelection,
     required this.productId,
   });
   
@@ -46,9 +51,10 @@ class SubscriptionPlan {
   static const SubscriptionPlan free = SubscriptionPlan(
     type: SubscriptionType.free,
     name: 'FREE',
-    description: '기본 기능 무료 체험',
+    description: '평생 5개 청크 생성',
     price: '무료',
     aiModel: SubscriptionConstants.freeAiModel,
+    creditLimit: 0,
     generationLimit: SubscriptionConstants.freeGenerationLimit,
     wordMinLimit: SubscriptionConstants.freeWordMinLimit,
     wordMaxLimit: SubscriptionConstants.freeWordMaxLimit,
@@ -56,42 +62,30 @@ class SubscriptionPlan {
     allowsTest: false,
     allowsPdfExport: false,
     allowsCharacterCreation: false,
+    allowsSeries: false,
+    allowsModelSelection: false,
     productId: SubscriptionConstants.freePlanId,
   );
   
-  /// Basic 플랜
-  static const SubscriptionPlan basic = SubscriptionPlan(
-    type: SubscriptionType.basic,
-    name: 'BASIC',
-    description: '기본 기능 모두 사용 가능',
-    price: SubscriptionConstants.basicMonthlyPrice,
-    discountPrice: SubscriptionConstants.basicMonthlyDiscountPrice,
-    aiModel: SubscriptionConstants.basicAiModel,
-    generationLimit: SubscriptionConstants.basicGenerationLimit,
-    wordMinLimit: SubscriptionConstants.basicWordMinLimit,
-    wordMaxLimit: SubscriptionConstants.basicWordMaxLimit,
-    hasAds: false,
-    allowsTest: true,
-    allowsPdfExport: true,
-    allowsCharacterCreation: true,
-    productId: SubscriptionConstants.basicMonthlyProductId,
-  );
   
   /// Premium 플랜
   static const SubscriptionPlan premium = SubscriptionPlan(
     type: SubscriptionType.premium,
     name: 'PREMIUM',
-    description: '고급 AI 모델 및 추가 기능',
+    description: '모든 기능 사용 가능',
     price: SubscriptionConstants.premiumMonthlyPrice,
     discountPrice: SubscriptionConstants.premiumMonthlyDiscountPrice,
     aiModel: SubscriptionConstants.premiumAiModel,
-    generationLimit: SubscriptionConstants.premiumGenerationLimit,
+    creditLimit: SubscriptionConstants.premiumCreditLimit,
+    generationLimit: 0, // 크레딧 기반이므로 무제한
     wordMinLimit: SubscriptionConstants.premiumWordMinLimit,
     wordMaxLimit: SubscriptionConstants.premiumWordMaxLimit,
     hasAds: false,
     allowsTest: true,
     allowsPdfExport: true,
     allowsCharacterCreation: true,
+    allowsSeries: true,
+    allowsModelSelection: true,
     productId: SubscriptionConstants.premiumMonthlyProductId,
   );
   
@@ -100,8 +94,6 @@ class SubscriptionPlan {
     switch (type) {
       case SubscriptionType.free:
         return free;
-      case SubscriptionType.basic:
-        return basic;
       case SubscriptionType.premium:
         return premium;
     }
@@ -111,8 +103,6 @@ class SubscriptionPlan {
   static SubscriptionPlan? fromProductId(String productId) {
     if (productId == SubscriptionConstants.freePlanId) {
       return free;
-    } else if (productId == SubscriptionConstants.basicMonthlyProductId) {
-      return basic;
     } else if (productId == SubscriptionConstants.premiumMonthlyProductId) {
       return premium;
     }
@@ -120,18 +110,24 @@ class SubscriptionPlan {
   }
 }
 
+// AI 모델 관련 코드 삭제 - 오직 Gemini만 사용
+
 /// 사용자의 구독 상태 클래스 (Freezed로 변환 예정)
 class SubscriptionStatus {
   final SubscriptionType subscriptionType;
   final DateTime? expiryDate;
-  final int generationCount;
+  final int remainingCredits; // 프리미엄 사용자의 남은 크레딧
+  final int generationCount; // 무료 사용자의 생성 횟수
   final DateTime lastGenerationResetDate;
+  final DateTime? lastCreditResetDate; // 크레딧 리셋 날짜
   
   const SubscriptionStatus({
     required this.subscriptionType,
     this.expiryDate,
+    this.remainingCredits = 0,
     this.generationCount = 0,
     required this.lastGenerationResetDate,
+    this.lastCreditResetDate,
   });
   
   /// 기본 무료 구독 상태
@@ -139,14 +135,22 @@ class SubscriptionStatus {
     return SubscriptionStatus(
       subscriptionType: SubscriptionType.free,
       lastGenerationResetDate: DateTime.now(),
+      remainingCredits: 0,
+      generationCount: 0,
     );
   }
   
-  /// 월 출력 횟수가 남아있는지 확인
-  bool get hasGenerationsLeft {
-    final plan = SubscriptionPlan.fromType(subscriptionType);
-    return generationCount < plan.generationLimit;
+  /// 생성이 가능한지 확인
+  bool get canGenerate {
+    if (subscriptionType == SubscriptionType.premium) {
+      return remainingCredits > 0;
+    } else {
+      final plan = SubscriptionPlan.fromType(subscriptionType);
+      return generationCount < plan.generationLimit;
+    }
   }
+  
+  // AI 모델 관련 메서드 제거 - 오직 Gemini만 사용
   
   /// 현재 구독이 유효한지 확인
   bool get isSubscriptionActive {
@@ -161,38 +165,70 @@ class SubscriptionStatus {
     return expiryDate!.isAfter(DateTime.now());
   }
   
-  /// 리워드 광고 시청으로 무료 출력 횟수 추가
-  SubscriptionStatus addRewardedGeneration() {
-    if (subscriptionType != SubscriptionType.free) {
-      return this; // 유료 구독자는 리워드 광고 적용 안 함
+  /// 크레디트 사용 (프리미엄 사용자)
+  SubscriptionStatus useCredits(int amount) {
+    if (subscriptionType != SubscriptionType.premium) {
+      return this;
     }
     
     return SubscriptionStatus(
       subscriptionType: subscriptionType,
       expiryDate: expiryDate,
+      remainingCredits: remainingCredits - amount,
       generationCount: generationCount,
       lastGenerationResetDate: lastGenerationResetDate,
+      lastCreditResetDate: lastCreditResetDate,
     );
   }
   
-  /// 출력 횟수 증가
+  /// 출력 횟수 증가 (무료 사용자)
   SubscriptionStatus incrementGenerationCount() {
     return SubscriptionStatus(
       subscriptionType: subscriptionType,
       expiryDate: expiryDate,
+      remainingCredits: remainingCredits,
       generationCount: generationCount + 1,
       lastGenerationResetDate: lastGenerationResetDate,
+      lastCreditResetDate: lastCreditResetDate,
     );
   }
   
   /// 새로운 구독 상태로 업데이트
   SubscriptionStatus updateSubscription(SubscriptionType newType, DateTime? newExpiryDate) {
+    final plan = SubscriptionPlan.fromType(newType);
     return SubscriptionStatus(
       subscriptionType: newType,
       expiryDate: newExpiryDate,
-      generationCount: 0, // 구독 변경 시 출력 횟수 리셋
+      remainingCredits: newType == SubscriptionType.premium ? plan.creditLimit : 0,
+      generationCount: 0,
       lastGenerationResetDate: DateTime.now(),
+      lastCreditResetDate: DateTime.now(),
     );
+  }
+  
+  /// 월별 리셋 확인 및 처리
+  SubscriptionStatus checkAndResetMonthly() {
+    final now = DateTime.now();
+    
+    // 프리미엄 사용자의 크레디트 리셋
+    if (subscriptionType == SubscriptionType.premium && lastCreditResetDate != null) {
+      final nextResetDate = DateTime(lastCreditResetDate!.year, lastCreditResetDate!.month + 1, 1);
+      if (now.isAfter(nextResetDate)) {
+        final plan = SubscriptionPlan.fromType(subscriptionType);
+        return SubscriptionStatus(
+          subscriptionType: subscriptionType,
+          expiryDate: expiryDate,
+          remainingCredits: plan.creditLimit,
+          generationCount: generationCount,
+          lastGenerationResetDate: lastGenerationResetDate,
+          lastCreditResetDate: now,
+        );
+      }
+    }
+    
+    // 무료 사용자는 리셋 없음 - 평생 5개
+    
+    return this;
   }
   
   /// JSON 변환 메서드
@@ -200,8 +236,10 @@ class SubscriptionStatus {
     return {
       'subscriptionType': subscriptionType.index,
       'expiryDate': expiryDate?.toIso8601String(),
+      'remainingCredits': remainingCredits,
       'generationCount': generationCount,
       'lastGenerationResetDate': lastGenerationResetDate.toIso8601String(),
+      'lastCreditResetDate': lastCreditResetDate?.toIso8601String(),
     };
   }
   
@@ -210,10 +248,14 @@ class SubscriptionStatus {
     return SubscriptionStatus(
       subscriptionType: SubscriptionType.values[json['subscriptionType'] ?? 0],
       expiryDate: json['expiryDate'] != null ? DateTime.parse(json['expiryDate']) : null,
+      remainingCredits: json['remainingCredits'] ?? 0,
       generationCount: json['generationCount'] ?? 0,
       lastGenerationResetDate: json['lastGenerationResetDate'] != null 
           ? DateTime.parse(json['lastGenerationResetDate']) 
           : DateTime.now(),
+      lastCreditResetDate: json['lastCreditResetDate'] != null
+          ? DateTime.parse(json['lastCreditResetDate'])
+          : null,
     );
   }
 }

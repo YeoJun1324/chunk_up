@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:chunk_up/domain/models/learning_history_entry.dart';
 import 'package:chunk_up/domain/models/review_reminder.dart';
 import 'package:chunk_up/domain/models/chunk.dart';
-import 'package:chunk_up/core/services/review_service.dart';
-import 'package:chunk_up/core/services/notification_service.dart'; // 알림 서비스 추가
+import 'package:chunk_up/domain/services/review/review_service.dart';
+import 'package:chunk_up/data/services/notifications/notification_service.dart'; // 알림 서비스 추가
 import 'package:chunk_up/di/service_locator.dart'; // 의존성 주입 추가
 import 'dart:convert';
 import 'package:provider/provider.dart';

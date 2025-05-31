@@ -1,7 +1,7 @@
 // lib/presentation/screens/character_detail_view.dart
 import 'package:flutter/material.dart';
 import 'package:chunk_up/domain/models/character.dart';
-import 'package:chunk_up/core/services/enhanced_character_service.dart';
+import 'package:chunk_up/domain/services/character/enhanced_character_service.dart';
 
 class CharacterDetailView extends StatelessWidget {
   final Character character;
@@ -154,7 +154,10 @@ class CharacterDetailView extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(content),
+            Text(
+              content,
+              textAlign: TextAlign.justify,
+            ),
           ],
         ),
       ),

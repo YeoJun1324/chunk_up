@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:chunk_up/core/services/prompt_template_service.dart';
+import 'package:chunk_up/domain/services/prompt/prompt_template_service.dart';
 import 'package:chunk_up/core/constants/prompt_templates.dart';
+import 'package:chunk_up/core/constants/prompt_config.dart';
 import 'package:chunk_up/presentation/widgets/labeled_border_container.dart';
 
 /// 프롬프트 템플릿 관리 화면
@@ -40,333 +41,344 @@ class _PromptTemplateScreenState extends State<PromptTemplateScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint('Error loading templates: $e');
       setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('템플릿 로드 실패: $e')),
+        );
+      }
     }
   }
 
   Future<void> _setActiveTemplate(String templateId) async {
-    await _templateService.setActiveTemplate(templateId);
-    setState(() {
-      _activeTemplateId = templateId;
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('템플릿이 활성화되었습니다'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    try {
+      await _templateService.setActiveTemplate(templateId);
+      setState(() {
+        _activeTemplateId = templateId;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('템플릿이 활성화되었습니다')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('템플릿 활성화 실패: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _deleteTemplate(String templateId) async {
-    final confirm = await showDialog<bool>(
+    // 기본 템플릿은 삭제 불가
+    final template = _templates.firstWhere((t) => t.id == templateId);
+    if (template.id == 'default') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('기본 템플릿은 삭제할 수 없습니다')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('템플릿 삭제'),
-        content: Text('이 템플릿을 삭제하시겠습니까?'),
+        title: const Text('템플릿 삭제'),
+        content: Text('${template.name} 템플릿을 삭제하시겠습니까?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('취소'),
+            child: const Text('취소'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('삭제', style: TextStyle(color: Colors.red)),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
           ),
         ],
       ),
     );
-    
-    if (confirm == true) {
-      await _templateService.deleteTemplate(templateId);
-      await _loadTemplates();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('템플릿이 삭제되었습니다'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+
+    if (confirmed == true) {
+      try {
+        await _templateService.deleteTemplate(templateId);
+        await _loadTemplates();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('템플릿이 삭제되었습니다')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('템플릿 삭제 실패: $e')),
+          );
+        }
+      }
     }
-  }
-
-  Future<void> _duplicateTemplate(String templateId) async {
-    final nameController = TextEditingController();
-    
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('템플릿 복제'),
-        content: TextField(
-          controller: nameController,
-          decoration: InputDecoration(
-            labelText: '새 템플릿 이름',
-            hintText: '복제된 템플릿의 이름을 입력하세요',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, nameController.text),
-            child: Text('복제'),
-          ),
-        ],
-      ),
-    );
-    
-    if (newName != null && newName.isNotEmpty) {
-      await _templateService.duplicateTemplate(templateId, newName);
-      await _loadTemplates();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('템플릿이 복제되었습니다'),
-          backgroundColor: Colors.blue,
-        ),
-      );
-    }
-  }
-
-  Future<void> _showTemplateStatistics() async {
-    final stats = await _templateService.getTemplateStatistics();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('템플릿 통계'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildStatItem('총 템플릿 수', '${stats['totalTemplates']}개'),
-              _buildStatItem('총 생성된 프롬프트', '${stats['totalPrompts']}개'),
-              _buildStatItem('평균 품질 점수', '${stats['averageQualityScore'].toStringAsFixed(1)}점'),
-              SizedBox(height: 16),
-              Text('출력 형식 분포', style: TextStyle(fontWeight: FontWeight.bold)),
-              ...(stats['outputFormatDistribution'] as Map<String, int>).entries.map(
-                (e) => _buildStatItem(e.key, '${e.value}개'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('닫기'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(value, style: TextStyle(fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('프롬프트 템플릿 관리'),
+        title: const Text('프롬프트 템플릿 관리'),
         actions: [
           IconButton(
-            icon: Icon(Icons.analytics),
-            onPressed: _showTemplateStatistics,
-            tooltip: '통계 보기',
-          ),
-          IconButton(
-            icon: Icon(Icons.add),
+            icon: const Icon(Icons.add),
             onPressed: () {
-              // TODO: 템플릿 생성 화면으로 이동
+              // TODO: 템플릿 추가 화면으로 이동
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('템플릿 생성 기능은 준비 중입니다')),
+                const SnackBar(content: Text('템플릿 추가 기능은 준비 중입니다')),
               );
             },
-            tooltip: '새 템플릿',
           ),
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : _templates.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.description_outlined, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text('템플릿이 없습니다', style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: EdgeInsets.all(16),
-                  itemCount: _templates.length,
-                  itemBuilder: (context, index) {
-                    final template = _templates[index];
-                    final isActive = template.id == _activeTemplateId;
-                    
-                    return Card(
-                      elevation: isActive ? 4 : 1,
-                      color: isActive ? Colors.orange.shade50 : null,
-                      margin: EdgeInsets.only(bottom: 12),
-                      child: ExpansionTile(
-                        leading: Icon(
-                          _getIconForOutputFormat(template.outputFormat),
-                          color: isActive ? Colors.orange : Colors.grey,
-                        ),
-                        title: Text(
-                          template.name,
-                          style: TextStyle(
-                            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                        subtitle: Text(template.description),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
+          ? const Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _templates.length,
+              itemBuilder: (context, index) {
+                final template = _templates[index];
+                final isActive = template.id == _activeTemplateId;
+                
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  elevation: isActive ? 4 : 1,
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isActive ? Colors.blue : Colors.grey,
+                      child: Icon(
+                        _getIconForOutputFormat(template.outputFormat),
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      template.name,
+                      style: TextStyle(
+                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(template.description),
+                        const SizedBox(height: 4),
+                        Row(
                           children: [
-                            if (isActive)
-                              Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  '활성',
-                                  style: TextStyle(color: Colors.white, fontSize: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _getOutputFormatName(template.outputFormat),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue,
                                 ),
                               ),
-                            PopupMenuButton<String>(
-                              onSelected: (value) {
-                                switch (value) {
-                                  case 'activate':
-                                    _setActiveTemplate(template.id);
-                                    break;
-                                  case 'duplicate':
-                                    _duplicateTemplate(template.id);
-                                    break;
-                                  case 'export':
-                                    // TODO: 템플릿 내보내기
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('내보내기 기능은 준비 중입니다')),
-                                    );
-                                    break;
-                                  case 'delete':
-                                    _deleteTemplate(template.id);
-                                    break;
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                if (!isActive)
-                                  PopupMenuItem(
-                                    value: 'activate',
-                                    child: ListTile(
-                                      leading: Icon(Icons.check_circle_outline),
-                                      title: Text('활성화'),
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                  ),
-                                PopupMenuItem(
-                                  value: 'duplicate',
-                                  child: ListTile(
-                                    leading: Icon(Icons.copy),
-                                    title: Text('복제'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'export',
-                                  child: ListTile(
-                                    leading: Icon(Icons.download),
-                                    title: Text('내보내기'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                if (template.id != 'default_narrative')
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: ListTile(
-                                      leading: Icon(Icons.delete, color: Colors.red),
-                                      title: Text('삭제', style: TextStyle(color: Colors.red)),
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                  ),
-                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '버전 ${template.version}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatDate(template.createdAt),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
                             ),
                           ],
                         ),
-                        children: [
-                          Padding(
-                            padding: EdgeInsets.all(16),
+                      ],
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isActive)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              '활성',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            switch (value) {
+                              case 'activate':
+                                _setActiveTemplate(template.id);
+                                break;
+                              case 'edit':
+                                // TODO: 편집 화면으로 이동
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('템플릿 편집 기능은 준비 중입니다'),
+                                  ),
+                                );
+                                break;
+                              case 'duplicate':
+                                // TODO: 복제 기능
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('템플릿 복제 기능은 준비 중입니다'),
+                                  ),
+                                );
+                                break;
+                              case 'delete':
+                                _deleteTemplate(template.id);
+                                break;
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            if (!isActive)
+                              const PopupMenuItem(
+                                value: 'activate',
+                                child: Text('활성화'),
+                              ),
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Text('편집'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'duplicate',
+                              child: Text('복제'),
+                            ),
+                            if (template.id != 'default')
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text(
+                                  '삭제',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text(template.name),
+                          content: SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                _buildInfoRow('출력 형식', _getOutputFormatName(template.outputFormat)),
-                                _buildInfoRow('버전', 'v${template.version}'),
-                                _buildInfoRow('생성일', _formatDate(template.createdAt)),
-                                if (template.updatedAt != null)
-                                  _buildInfoRow('수정일', _formatDate(template.updatedAt!)),
-                                SizedBox(height: 16),
-                                Text('섹션:', style: TextStyle(fontWeight: FontWeight.bold)),
-                                SizedBox(height: 8),
-                                ...template.sections.entries.map((entry) => 
-                                  Padding(
-                                    padding: EdgeInsets.only(left: 16, bottom: 8),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          entry.key,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.blue,
-                                          ),
-                                        ),
-                                        Text(
-                                          entry.value,
-                                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
+                                LabeledBorderContainer(
+                                  label: '설명',
+                                  child: Text(template.description),
+                                ),
+                                const SizedBox(height: 16),
+                                LabeledBorderContainer(
+                                  label: '출력 형식',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _getIconForOutputFormat(template.outputFormat),
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(_getOutputFormatName(template.outputFormat)),
+                                    ],
                                   ),
+                                ),
+                                const SizedBox(height: 16),
+                                LabeledBorderContainer(
+                                  label: '섹션',
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: template.sections.entries.map((entry) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 8),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              entry.key,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              entry.value,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[700],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Text(
+                                      '생성일: ${_formatDate(template.createdAt)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    if (template.updatedAt != null) ...[
+                                      const SizedBox(width: 16),
+                                      Text(
+                                        '수정일: ${_formatDate(template.updatedAt!)}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Text('$label: ', style: TextStyle(fontWeight: FontWeight.w500)),
-          Text(value),
-        ],
-      ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('닫기'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
     );
   }
 

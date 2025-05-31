@@ -6,6 +6,17 @@ allprojects {
     }
 }
 
+// Build script dependencies
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.google.gms:google-services:4.4.0")
+    }
+}
+
 // Android 플러그인 설정
 subprojects {
     project.evaluationDependsOn(":app")

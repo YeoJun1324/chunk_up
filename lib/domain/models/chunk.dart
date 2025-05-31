@@ -13,6 +13,7 @@ class Chunk {
   final DateTime createdAt; // 생성 일시
   final List<Word> includedWords; // 포함된 단어 목록
   final Map<String, String> wordExplanations; // 단어 설명
+  final Map<String, String>? wordMappings; // 단어별 한국어 번역 매핑 (단어 -> 한국어)
 
   // 생성 파라미터 (재출력에 사용)
   final List<String> character; // 캐릭터 목록
@@ -28,6 +29,7 @@ class Chunk {
     required this.includedWords,
     DateTime? createdAt,
     Map<String, String>? wordExplanations,
+    this.wordMappings,
     this.character = const [],
     this.scenario,
     this.additionalDetails,
@@ -48,6 +50,7 @@ class Chunk {
     List<Word>? includedWords,
     DateTime? createdAt,
     Map<String, String>? wordExplanations,
+    Map<String, String>? wordMappings,
     List<String>? character,
     String? scenario,
     String? additionalDetails,
@@ -61,6 +64,7 @@ class Chunk {
       includedWords: includedWords ?? List<Word>.from(this.includedWords),
       createdAt: createdAt ?? this.createdAt,
       wordExplanations: wordExplanations ?? Map<String, String>.from(this.wordExplanations),
+      wordMappings: wordMappings ?? (this.wordMappings != null ? Map<String, String>.from(this.wordMappings!) : null),
       character: character ?? List<String>.from(this.character),
       scenario: scenario ?? this.scenario,
       additionalDetails: additionalDetails ?? this.additionalDetails,
@@ -231,6 +235,7 @@ class Chunk {
       'createdAt': createdAt.toIso8601String(),
       'includedWords': includedWords.map((w) => {'english': w.english, 'korean': w.korean}).toList(),
       'wordExplanations': wordExplanations,
+      'wordMappings': wordMappings,
       'character': character,
       'scenario': scenario,
       'additionalDetails': additionalDetails,
@@ -249,6 +254,7 @@ class Chunk {
       createdAt: DateTime.parse(json['createdAt']),
       includedWords: wordsJson.map((w) => Word(english: w['english'], korean: w['korean'])).toList(),
       wordExplanations: Map<String, String>.from(json['wordExplanations'] ?? {}),
+      wordMappings: json['wordMappings'] != null ? Map<String, String>.from(json['wordMappings']) : null,
       character: json['character'] != null 
           ? (json['character'] is List ? List<String>.from(json['character']) : [json['character']])
           : [],

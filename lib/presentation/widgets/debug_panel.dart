@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:chunk_up/core/config/app_config.dart';
 import 'package:chunk_up/core/config/feature_flags.dart';
-import 'package:chunk_up/core/services/subscription_service.dart';
+import 'package:chunk_up/data/services/subscription/subscription_service.dart';
 import 'package:chunk_up/di/service_locator.dart';
 
 /// 내부 테스트용 디버그 패널
@@ -64,7 +64,7 @@ class _DebugPanelState extends State<DebugPanel> {
       height: _isExpanded ? 300 : 40,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.grey.shade800.withOpacity(0.9),
+        color: Colors.grey.shade800.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -121,10 +121,13 @@ class _DebugPanelState extends State<DebugPanel> {
                     
                     const SizedBox(height: 16),
                     _buildSectionTitle('구독 상태'),
-                    _buildInfoRow('현재 상태', _subscriptionService.status.toString()),
+                    _buildInfoRow('현재 상태', _subscriptionService.status.toString().split('.').last),
                     _buildInfoRow('프리미엄', _subscriptionService.isPremium.toString()),
-                    _buildInfoRow('남은 크레딧', _subscriptionService.remainingCredits.toString()),
-                    _buildInfoRow('사용 중인 AI 모델', _subscriptionService.getCurrentModel()),
+                    if (_subscriptionService.isPremium)
+                      _buildInfoRow('남은 크레딧', '${_subscriptionService.remainingCredits}/100'),
+                    if (!_subscriptionService.isPremium)
+                      _buildInfoRow('무료 생성 사용', '${5 - _subscriptionService.remainingGenerations}/5회'),
+                    _buildInfoRow('AI 모델', 'Gemini 2.5 Flash (통합)'),
                     
                     const SizedBox(height: 16),
                     _buildSectionTitle('테스트 기능'),
@@ -142,13 +145,7 @@ class _DebugPanelState extends State<DebugPanel> {
                         setState(() {});
                       },
                     ),
-                    _buildActionRow(
-                      '기본 구독으로 변경',
-                      () async {
-                        await _subscriptionService.activateTestSubscription(isPremium: false);
-                        setState(() {});
-                      },
-                    ),
+                    // Basic 플랜 제거됨
                     _buildActionRow(
                       '크레딧 새로고침',
                       () async {
@@ -164,18 +161,30 @@ class _DebugPanelState extends State<DebugPanel> {
                       },
                     ),
                     _buildActionRow(
-                      '크레딧 추가 (+5)',
+                      '크레딧 추가 (+5) - 테스트용',
                       () async {
-                        await _subscriptionService.addFreeCredits(5);
+                        await _subscriptionService.addCredits(5);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('테스트용 크레딧 5개 추가됨 (남은 크레딧: ${_subscriptionService.remainingCredits})'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
                         setState(() {});
                       },
                     ),
                     _buildActionRow(
-                      'API 키 정보 보기',
+                      'Gemini API 정보',
                       () async {
                         _showApiKeyDialog();
                       },
                     ),
+                    const SizedBox(height: 16),
+                    _buildSectionTitle('시스템 정보'),
+                    _buildInfoRow('구독 플랜', 'Free/Premium (2단계)'),
+                    _buildInfoRow('크레딧 시스템', '모든 생성 1크레딧'),
+                    _buildInfoRow('무료 제한', '평생 5회'),
+                    _buildInfoRow('프리미엄 크레딧', '월 100개'),
                   ],
                 ),
               ),
@@ -296,10 +305,8 @@ class _DebugPanelState extends State<DebugPanel> {
   // API 키 가져오기
   Future<String?> getApiKey() async {
     try {
-      // 여러 경로를 통해 API 키 확인 시도
-      final apiKey = await getIt<SubscriptionService>()
-          .getCurrentModel(); // 실제로는 API 키가 아닌 모델 ID
-      return apiKey;
+      // Gemini API는 URL에 키를 포함하므로 별도 API 키 반환 불필요
+      return 'Gemini API Key (URL에 포함)';
     } catch (e) {
       debugPrint('API 키 가져오기 오류: $e');
       return null;

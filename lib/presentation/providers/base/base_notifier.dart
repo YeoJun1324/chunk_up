@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:chunk_up/core/error/error_handler.dart';
-import 'package:chunk_up/core/services/logging_service.dart';
+import 'package:chunk_up/infrastructure/logging/logging_service.dart';
 import 'package:get_it/get_it.dart';
 
 /// Base class for all notifiers with common functionality

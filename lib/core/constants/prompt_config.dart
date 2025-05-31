@@ -1,4 +1,93 @@
-import 'prompt_templates.dart';
+// import 'prompt_templates.dart'; // 사용하지 않음
+
+// 출력 형식 열거형
+enum OutputFormat {
+  dialogue,     // 대화문
+  monologue,    // 독백
+  narrative,    // 나레이션
+  letter,       // 편지/일기
+  thought,      // 내적 독백
+  description,  // 상황 묘사
+}
+
+// 시점 열거형
+enum TimePoint {
+  beforeEvent,    // 사건 전
+  duringEvent,    // 사건 중
+  afterEvent,     // 사건 후
+  flashback,      // 회상
+  climax,         // 클라이맥스
+  resolution,     // 해결 후
+  custom,         // 사용자 정의
+}
+
+// 감정 상태 열거형
+enum EmotionalState {
+  desperate,      // 절망적인
+  determined,     // 결의에 찬
+  confused,       // 혼란스러운
+  melancholic,    // 우울한
+  hopeful,        // 희망적인
+  angry,          // 분노한
+  peaceful,       // 평온한
+  anxious,        // 불안한
+}
+
+// 톤 열거형
+enum Tone {
+  serious,        // 진지한
+  tragic,         // 비극적인
+  hopeful,        // 희망적인
+  dark,           // 어두운
+  nostalgic,      // 향수적인
+  tense,          // 긴장감 있는
+  intimate,       // 친밀한
+  philosophical,  // 철학적인
+}
+
+// 고급 설정 클래스
+class AdvancedSettings {
+  final TimePoint? timePoint;
+  final String? customTimePoint;
+  final EmotionalState? emotionalState;
+  final Tone? tone;
+  final String? customSetting;
+  final List<String>? specialElements;
+
+  const AdvancedSettings({
+    this.timePoint,
+    this.customTimePoint,
+    this.emotionalState,
+    this.tone,
+    this.customSetting,
+    this.specialElements,
+  });
+  
+  String toContextString() {
+    final parts = <String>[];
+    
+    if (timePoint != null) {
+      parts.add('TimePoint: ${timePoint!.name}');
+    }
+    if (customTimePoint != null) {
+      parts.add('Custom TimePoint: $customTimePoint');
+    }
+    if (emotionalState != null) {
+      parts.add('Emotional State: ${emotionalState!.name}');
+    }
+    if (tone != null) {
+      parts.add('Tone: ${tone!.name}');
+    }
+    if (customSetting != null) {
+      parts.add('Custom Setting: $customSetting');
+    }
+    if (specialElements != null && specialElements!.isNotEmpty) {
+      parts.add('Special Elements: ${specialElements!.join(", ")}');
+    }
+    
+    return parts.isEmpty ? 'No advanced settings' : parts.join(' | ');
+  }
+}
 
 /// 프롬프트 설정을 관리하는 클래스
 /// 유지보수성을 위해 프롬프트 관련 설정을 중앙화

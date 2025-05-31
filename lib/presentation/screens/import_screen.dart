@@ -3,8 +3,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chunk_up/domain/models/word_list_info.dart';
-import 'package:chunk_up/data/services/excel_import_service.dart';
-import 'package:chunk_up/data/services/csv_import_service.dart';
+import 'package:chunk_up/data/services/importers/excel_import_service.dart';
+import 'package:chunk_up/data/services/importers/csv_import_service.dart';
 import 'package:chunk_up/presentation/providers/word_list_notifier.dart';
 
 class ImportScreen extends StatefulWidget {

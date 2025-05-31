@@ -7,8 +7,7 @@ import 'package:chunk_up/domain/models/word.dart';
 import 'package:chunk_up/domain/models/word_list_info.dart';
 import 'package:chunk_up/domain/models/chunk.dart';
 import 'package:chunk_up/presentation/providers/word_list_notifier.dart';
-import 'package:chunk_up/data/datasources/remote/api_service.dart' as remote_api;
-import 'package:chunk_up/core/services/api_service.dart';
+import 'package:chunk_up/domain/services/api_service_interface.dart';
 import 'package:chunk_up/core/utils/word_highlighter.dart';
 import 'package:chunk_up/di/service_locator.dart' as di;
 import 'package:uuid/uuid.dart';
@@ -121,8 +120,6 @@ class ChunkResultData {
 }
 
 class _ChunkResultScreenState extends State<ChunkResultScreen> {
-  final PageController _pageController = PageController();
-  int _currentPageIndex = 0;
   bool _isEditing = false;
   bool _isLoading = false;
   bool _isModified = false; // 수정 여부 추적
@@ -156,7 +153,6 @@ class _ChunkResultScreenState extends State<ChunkResultScreen> {
 
   @override
   void dispose() {
-    _pageController.dispose();
     _englishTextController.dispose();
     _koreanTextController.dispose();
     _titleController.dispose();
@@ -172,7 +168,8 @@ class _ChunkResultScreenState extends State<ChunkResultScreen> {
 
     try {
       // API 서비스를 통해 설명 생성
-      final String explanation = await remote_api.ApiService.generateWordExplanation(
+      final apiService = di.getIt<ApiServiceInterface>();
+      final String explanation = await apiService.generateWordExplanation(
         word,
         _resultData.englishChunk,
       );
@@ -375,7 +372,12 @@ class _ChunkResultScreenState extends State<ChunkResultScreen> {
                   )
                 : Text(
                     content,
-                    style: const TextStyle(fontSize: 17, height: 1.6, color: Colors.black87),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      height: 1.6,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.left,
                   )
               ),
           ),
@@ -466,55 +468,176 @@ class _ChunkResultScreenState extends State<ChunkResultScreen> {
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('수정 사항 입력'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '기존 단락에서 어떤 점을 변경하고 싶으신가요? 구체적으로 설명해주세요.',
-                style: TextStyle(fontSize: 14),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+            
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: modificationController,
-                decoration: const InputDecoration(
-                  hintText: '예: 분위기를 더 밝게 해주세요, 좀 더 대화를 많이 넣어주세요',
-                  border: OutlineInputBorder(),
+              elevation: 8,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 500),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDarkMode
+                        ? [Colors.grey.shade900, Colors.grey.shade800]
+                        : [Colors.white, Colors.grey.shade50],
+                  ),
                 ),
-                maxLines: 3,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.1),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.auto_fix_high,
+                              color: Colors.orange,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '청크 재생성',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  '어떻게 수정하고 싶으신가요?',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Content
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          // Custom modification
+                          TextField(
+                            controller: modificationController,
+                            autofocus: true,
+                            decoration: InputDecoration(
+                              labelText: '수정 방법을 입력하세요',
+                              hintText: '예: 좀 더 유머러스하게, 학술적인 톤으로, 더 길게, 더 짧게...',
+                              prefixIcon: const Icon(Icons.edit_note, color: Colors.orange),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.orange, width: 2),
+                              ),
+                            ),
+                            maxLines: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Actions
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: isDarkMode 
+                            ? Colors.grey.shade800.withOpacity(0.5)
+                            : Colors.grey.shade50,
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: Text(
+                              '취소',
+                              style: TextStyle(
+                                color: isDarkMode ? Colors.white70 : Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.auto_awesome, size: 18),
+                            label: const Text('재생성'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 2,
+                            ),
+                            onPressed: () {
+                              final modifications = modificationController.text.trim();
+                              
+                              if (modifications.isNotEmpty) {
+                                Navigator.pop(dialogContext);
+                                _generateModifiedChunk(modifications);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('수정 방법을 입력해주세요.'),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              child: const Text('취소'),
-              onPressed: () => Navigator.pop(dialogContext),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('재생성'),
-              onPressed: () {
-                final String modifications = modificationController.text.trim();
-                if (modifications.isNotEmpty) {
-                  Navigator.pop(dialogContext);
-                  _generateModifiedChunk(modifications);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('수정 사항을 입력해주세요.')),
-                  );
-                }
-              },
-            ),
-          ],
+            );
+          },
         );
       },
     );
   }
+
 
   Future<void> _generateModifiedChunk(String modifications) async {
     setState(() {
@@ -523,7 +646,7 @@ class _ChunkResultScreenState extends State<ChunkResultScreen> {
 
     try {
       // 필요한 import 추가
-      final apiService = di.getIt<ApiService>();
+      final apiService = di.getIt<ApiServiceInterface>();
 
       // 단어들의 목록 확보
       final wordList = <String>[];
@@ -531,31 +654,50 @@ class _ChunkResultScreenState extends State<ChunkResultScreen> {
         wordList.add("${word.english}: ${word.korean}");
       }
 
+      // 원본 생성 파라미터 확인
+      final originalParams = _resultData.originalGenerationParams;
+      String contextInfo = '';
+      
+      if (originalParams != null) {
+        if (originalParams['character'] != null && originalParams['character'] is List && 
+            (originalParams['character'] as List).isNotEmpty) {
+          contextInfo += '\nCharacter Context: ${(originalParams['character'] as List).join(", ")}';
+        }
+        if (originalParams['scenario'] != null && originalParams['scenario'].toString().isNotEmpty) {
+          contextInfo += '\nScenario: ${originalParams['scenario']}';
+        }
+        if (originalParams['details'] != null && originalParams['details'].toString().isNotEmpty) {
+          contextInfo += '\nAdditional Details: ${originalParams['details']}';
+        }
+      }
+
       // Build modified prompt for the API
       final String modifiedPrompt = """
 I need you to improve or modify the paragraph you generated earlier based on specific feedback.
 
 Original paragraph:
-${widget.result['englishChunk']}
+${_resultData.englishChunk}
 
 Original Korean translation:
-${widget.result['koreanTranslation']}
+${_resultData.koreanTranslation}
 
 Original word list:
 ${wordList.join('\n')}
+$contextInfo
 
-Please make these specific changes:
+User's modification request:
 $modifications
 
 REQUIREMENTS:
 1. Keep using ALL the same vocabulary words as before
 2. Use EACH vocabulary word EXACTLY ONCE - do not repeat any word from the word list
-3. Maintain the story flow while applying the requested changes
-4. Make the Korean translation natural and fluent
-5. FOR EACH WORD in the original word list, provide a detailed explanation IN KOREAN about how the word is used in the context
-6. Return ONLY valid JSON with this exact format:
+3. Apply the requested modifications while maintaining coherence
+4. If character context was provided, maintain character consistency
+5. Make the Korean translation natural and fluent
+6. FOR EACH WORD in the original word list, provide a detailed explanation IN KOREAN about how the word is used in the context
+7. Return ONLY valid JSON with this exact format:
 {
-  "title": "Updated title that reflects changes",
+  "title": "A creative title that reflects the modified content",
   "englishContent": "The modified English paragraph...",
   "koreanTranslation": "한국어 번역...",
   "wordExplanations": {
@@ -566,7 +708,7 @@ REQUIREMENTS:
 """;
 
       // 실제 API 호출 - 원본과 동일한 모델 사용
-      final String? originalModel = widget.result['usedModel'];
+      final String? originalModel = _resultData.usedModel;
       if (originalModel != null) {
         debugPrint('🔄 재출력: 원본과 동일한 모델 사용 - $originalModel');
       }
@@ -614,36 +756,45 @@ REQUIREMENTS:
         throw Exception('응답 파싱 중 오류 발생: $parsingError');
       }
 
-      // 결과 업데이트
+      // 결과 업데이트 - 불변 객체 패턴 사용
       setState(() {
         _isLoading = false;
-        if (jsonData['title'] != null) {
-          widget.result['title'] = jsonData['title'];
-          _titleController.text = jsonData['title'];
-        }
-        widget.result['englishChunk'] = jsonData['english_chunk'];
-        widget.result['koreanTranslation'] = jsonData['korean_translation'];
-        _englishTextController.text = jsonData['english_chunk'];
-        _koreanTextController.text = jsonData['korean_translation'];
-
-        // 새로운 단어 설명으로 업데이트 - 항상 새로운 단어 설명 적용
+        
+        // 새로운 단어 설명 정규화
         final newExplanations = jsonData['wordExplanations'] ?? {};
+        final Map<String, dynamic> normalizedExplanations = {};
         if (newExplanations is Map) {
-          // 항상 새 설명으로 전부 교체 (키를 소문자로 변환하여 일관성 유지)
-          final Map<String, dynamic> normalizedExplanations = {};
           newExplanations.forEach((key, value) {
-            // 문자열 키를 소문자로 변환하여 저장
             if (key is String) {
               normalizedExplanations[key.toLowerCase()] = value;
             } else {
               normalizedExplanations[key.toString()] = value;
             }
           });
-
-          widget.result['wordExplanations'] = normalizedExplanations;
-          print('단어 설명 ${normalizedExplanations.length}개 업데이트됨');
         }
+        
+        // 불변 객체로 결과 업데이트
+        _resultData = _resultData.copyWith(
+          title: jsonData['title'] ?? _resultData.title,
+          englishChunk: jsonData['english_chunk'] ?? '',
+          koreanTranslation: jsonData['korean_translation'] ?? '',
+          wordExplanations: normalizedExplanations,
+        );
+        
+        // 텍스트 컨트롤러 업데이트
+        _titleController.text = _resultData.title;
+        _englishTextController.text = _resultData.englishChunk;
+        _koreanTextController.text = _resultData.koreanTranslation;
+        
+        // widget.result 업데이트 (레거시 호환성)
+        widget.result['title'] = _resultData.title;
+        widget.result['englishChunk'] = _resultData.englishChunk;
+        widget.result['koreanTranslation'] = _resultData.koreanTranslation;
+        widget.result['wordExplanations'] = normalizedExplanations;
+        
         _isModified = true; // 재생성 후 수정됨으로 표시
+        
+        debugPrint('✅ 재생성 완료 - 단어 설명 ${normalizedExplanations.length}개 업데이트됨');
       });
 
       // Show success message
@@ -840,30 +991,9 @@ REQUIREMENTS:
   @override
   Widget build(BuildContext context) {
     // 불변 객체를 사용하여 현재 상태 가져오기
-    final String currentEnglishChunk = _resultData.englishChunk;
-    final String currentKoreanTranslation = _resultData.koreanTranslation;
-
-    final List<Widget> pages = [
-      // 영어 단락 페이지에는 단어 목록도 함께 표시
-      SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildPageViewContent(
-              '영어 단락 (English Chunk)',
-              currentEnglishChunk,
-              isEnglish: true,
-              controller: _englishTextController,
-            ),
-            _buildUsedWordsSection(),
-          ],
-        ),
-      ),
-      _buildPageViewContent(
-        '한국어 해석 (Korean Translation)',
-        currentKoreanTranslation,
-        controller: _koreanTextController,
-      ),
-    ];
+    // ||| 구분자 제거하고 공백 추가
+    final String currentEnglishChunk = _resultData.englishChunk.replaceAll('|||', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final String currentKoreanTranslation = _resultData.koreanTranslation.replaceAll('|||', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 
     return Scaffold(
       appBar: AppBar(
@@ -911,52 +1041,29 @@ REQUIREMENTS:
               ],
             ),
           ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(40.0),
-            child: Builder(
-              builder: (context) {
-                // 다크 모드 감지
-                final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List<Widget>.generate(pages.length, (index) {
-                    return GestureDetector(
-                      onTap: () => _pageController.animateToPage(
-                        index,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                        child: Text(
-                          index == 0 ? '영어' : '한국어',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: _currentPageIndex == index ? FontWeight.bold : FontWeight.normal,
-                            color: _currentPageIndex == index
-                                ? (isDarkMode ? Colors.white : Colors.white)
-                                : (isDarkMode ? Colors.white70 : Colors.grey.shade300),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                );
-              }
-            ),
-          )
       ),
       body: Stack(
         children: [
-          PageView(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                _currentPageIndex = index;
-              });
-            },
-            children: pages,
+          SingleChildScrollView(
+            child: Column(
+              children: [
+                // 영어 단락
+                _buildPageViewContent(
+                  '영어 단락 (English Chunk)',
+                  currentEnglishChunk,
+                  isEnglish: true,
+                  controller: _englishTextController,
+                ),
+                // 한국어 해석
+                _buildPageViewContent(
+                  '한국어 해석 (Korean Translation)',
+                  currentKoreanTranslation,
+                  controller: _koreanTextController,
+                ),
+                // 사용된 단어 목록
+                _buildUsedWordsSection(),
+              ],
+            ),
           ),
 
           // Loading overlay
@@ -1034,27 +1141,32 @@ REQUIREMENTS:
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             ElevatedButton.icon(
-              icon: const Icon(Icons.refresh, color: Colors.orange),
-              label: const Text('재출력', style: TextStyle(color: Colors.orange)),
+              icon: const Icon(Icons.auto_fix_high),
+              label: const Text('재출력'),
               onPressed: _handleReprint,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
+                backgroundColor: Colors.orange.withOpacity(0.1),
                 foregroundColor: Colors.orange,
-                elevation: 1,
-                side: const BorderSide(color: Colors.orange),
+                elevation: 0,
+                side: BorderSide(color: Colors.orange.withOpacity(0.3), width: 1.5),
                 minimumSize: Size(MediaQuery.of(context).size.width * 0.44, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             ElevatedButton.icon(
-              icon: const Icon(Icons.check_circle_outline, color: Colors.orange),
-              label: const Text('확인', style: TextStyle(color: Colors.orange)),
+              icon: const Icon(Icons.check_circle),
+              label: const Text('확인'),
               onPressed: _confirmAndNavigateHome,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.orange,
-                elevation: 1,
-                side: const BorderSide(color: Colors.orange),
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                elevation: 2,
                 minimumSize: Size(MediaQuery.of(context).size.width * 0.44, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],

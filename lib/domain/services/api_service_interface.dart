@@ -13,6 +13,9 @@ abstract class ApiServiceInterface {
   /// API 키 저장하기
   Future<void> saveApiKey(String apiKey);
   
+  /// API 키 설정하기 (saveApiKey의 별칭)
+  Future<void> setApiKey(String apiKey);
+  
   /// API 키 검증하기
   Future<bool> validateApiKey(String apiKey);
   
@@ -48,6 +51,18 @@ abstract class ApiServiceInterface {
   
   /// API 서비스 초기화
   Future<void> initialize();
+
+  /// 모델 성능 비교
+  Future<Map<String, dynamic>> compareModels(String prompt);
+  
+  /// 구독 상태 확인
+  Future<Map<String, dynamic>> getSubscriptionStatus();
+  
+  /// 구독 업그레이드 (Google Play 구매 검증)
+  Future<String> upgradeSubscription({
+    required String subscriptionTier,
+    required Map<String, dynamic> paymentInfo,
+  });
 }
 
 /// 네트워크 관련 예외 클래스

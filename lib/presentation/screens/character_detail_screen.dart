@@ -112,7 +112,10 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       appBar: AppBar(
         title: Text(
           widget.character == null ? '새 캐릭터 추가' : '캐릭터 편집',
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.white : Colors.black,
+          ),
         ),
         elevation: 0,
         backgroundColor: isDarkMode ? const Color(0xFF2D2D2D) : Colors.white,
@@ -216,6 +219,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                 borderColor: Colors.grey.shade300,
                 focusedBorderColor: Colors.grey.shade400,
                 labelColor: Colors.black87,
+                textAlign: TextAlign.justify,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return '캐릭터 설명을 입력하세요';
@@ -233,6 +237,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                 borderColor: Colors.grey.shade300,
                 focusedBorderColor: Colors.grey.shade400,
                 labelColor: Colors.black87,
+                textAlign: TextAlign.justify,
               ),
               const SizedBox(height: 24),
               
@@ -267,11 +272,15 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                 hintStyle: TextStyle(color: Colors.grey[400]),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey.shade300),
+                                  borderSide: BorderSide.none,
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey.shade400),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide.none,
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
@@ -292,32 +301,40 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: _catchPhrases.map((phrase) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.format_quote, size: 16, color: Colors.blue[700]),
-                                const SizedBox(width: 6),
-                                Text(
-                                  phrase,
-                                  style: TextStyle(color: Colors.blue[700]),
-                                ),
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: () => _removeCatchPhrase(phrase),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 16,
-                                    color: Colors.blue[700],
+                          children: _catchPhrases.map((phrase) => IntrinsicWidth(
+                            child: Container(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width - 80,
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.format_quote, size: 16, color: Colors.blue[700]),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      phrase,
+                                      style: TextStyle(color: Colors.blue[700]),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: () => _removeCatchPhrase(phrase),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 16,
+                                      color: Colors.blue[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           )).toList(),
                         ),
@@ -359,11 +376,15 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                 hintStyle: TextStyle(color: Colors.grey[400]),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey.shade300),
+                                  borderSide: BorderSide.none,
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Colors.grey.shade400),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide.none,
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
@@ -384,32 +405,40 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: _tags.map((tag) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.label_outline, size: 16, color: Colors.orange[700]),
-                                const SizedBox(width: 6),
-                                Text(
-                                  tag,
-                                  style: TextStyle(color: Colors.orange[700]),
-                                ),
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: () => _removeTag(tag),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 16,
-                                    color: Colors.orange[700],
+                          children: _tags.map((tag) => IntrinsicWidth(
+                            child: Container(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width - 80,
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.label_outline, size: 16, color: Colors.orange[700]),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      tag,
+                                      style: TextStyle(color: Colors.orange[700]),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: () => _removeTag(tag),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 16,
+                                      color: Colors.orange[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           )).toList(),
                         ),
