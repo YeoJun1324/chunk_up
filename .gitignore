@@ -10,6 +10,25 @@
 .svn/
 migrate_working_dir/
 
+# 압축 파일 (일반적으로 대용량)
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.gz
+*.bz2
+*.xz
+*.iso
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.msi
+*.cab
+
 # IntelliJ related
 *.iml
 *.ipr
