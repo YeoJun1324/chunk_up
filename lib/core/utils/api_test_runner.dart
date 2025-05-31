@@ -20,6 +20,7 @@ class _ApiTestRunnerState extends State<ApiTestRunner> {
   @override
   void initState() {
     super.initState();
+    // API 키는 환경 변수나 보안 저장소에서 가져와야 합니다
     _apiKeyController.text = "";
   }
 

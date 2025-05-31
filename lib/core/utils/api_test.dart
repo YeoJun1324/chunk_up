@@ -15,19 +15,24 @@ class ApiTest {
     
     debugPrint('🔍 API 키 테스트 시작 - 모든 소스 확인');
     
-    // 1. 하드코딩된 키 테스트
-    final String hardcodedKey = "";
+    // 1. 환경 변수에서 키 테스트
+    final String? envKey = String.fromEnvironment('ANTHROPIC_API_KEY');
     
-    debugPrint('🧪 하드코딩된 API 키 테스트 중...');
-    final hardcodedKeyResult = await ApiKeyTester.testApiKey(hardcodedKey);
-    if (hardcodedKeyResult['success'] == true) {
-      debugPrint('✅ 하드코딩된 API 키 테스트 성공');
-      successCount++;
-    } else {
-      debugPrint('❌ 하드코딩된 API 키 테스트 실패: ${hardcodedKeyResult['error']}');
-      if (hardcodedKeyResult['status_code'] != null) {
-        debugPrint('📋 상태 코드: ${hardcodedKeyResult['status_code']}');
+    if (envKey != null && envKey.isNotEmpty) {
+      debugPrint('🧪 환경 변수 API 키 테스트 중...');
+      final envKeyResult = await ApiKeyTester.testApiKey(envKey);
+      if (envKeyResult['success'] == true) {
+        debugPrint('✅ 환경 변수 API 키 테스트 성공');
+        successCount++;
+      } else {
+        debugPrint('❌ 환경 변수 API 키 테스트 실패: ${envKeyResult['error']}');
+        if (envKeyResult['status_code'] != null) {
+          debugPrint('📋 상태 코드: ${envKeyResult['status_code']}');
+        }
+        failCount++;
       }
+    } else {
+      debugPrint('⚠️ 환경 변수에서 API 키를 찾을 수 없음');
       failCount++;
     }
     
